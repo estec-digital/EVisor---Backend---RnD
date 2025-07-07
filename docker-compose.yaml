@@ -19,13 +19,13 @@ services:
     depends_on:
       - minio
     volumes:
-      - ./minio/minio_data:/upload-data
+      - ./minio/minio_data:/data
     entrypoint: >
       sh -c "
         sleep 5 &&
         mc alias set local http://${MINIO_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
         mc mb local/${MINIO_BUCKET} || true &&
-        mc cp /upload-data/demo.txt local/${MINIO_BUCKET}/
+        mc cp --recursive /data local/${MINIO_BUCKET}
       "
     restart: "no"
 
@@ -39,7 +39,8 @@ services:
     ports:
       - "${POSTGRES_PORT_EXTERNAL}:${POSTGRES_PORT_INTERNAL}"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+      - ./postgres/postgres_data:/postgresql/data
     restart: unless-stopped
 
   portainer:

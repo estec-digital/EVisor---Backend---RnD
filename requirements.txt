@@ -1,0 +1,7 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+pandas
+minio
+python-dotenv
+openpyxl
+psycopg2-binary
