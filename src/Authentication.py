@@ -15,7 +15,7 @@ def Authentication_function(conn, input):
     try:
         cursor = conn.cursor()
         query = """
-            SELECT "username", "password" FROM "User" WHERE "username" = %s AND "password" = %s
+            SELECT "username", "password", "avatar", "full_name" FROM "User" WHERE "username" = %s AND "password" = %s
             """
         cursor.execute(query, (input.username, input.password))
         user = cursor.fetchone()
@@ -40,8 +40,12 @@ def Authentication_function(conn, input):
             return {
                 "status": "success", 
                 "authentication": "success",
+                "user_id": user[0],
+                "avatar": user[2],
+                "full_name": user[3],
                 "message": "Đăng nhập thành công!",
-                "session_id": session_id
+                "session_id": session_id,
+                "expires_at": expires_at
                 }
         else:
             return {
@@ -90,3 +94,23 @@ def check_session(conn , user_id: str) -> bool:
     finally:
         cursor.close()
         conn.close()
+
+def Authentication_Logout_function(conn, input):
+    try:
+        user = input.username
+        if user:
+            cursor = conn.cursor()
+            delete_query = """
+                DELETE FROM "Session" WHERE "user_id" = %s
+                """
+            cursor.execute(delete_query, (user,))
+            conn.commit()
+            return {
+                "status": "success", 
+                "message": "Đăng xuất thành công!"
+                }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+            }

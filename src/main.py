@@ -47,6 +47,7 @@ minio_client = Minio(
     secret_key=f"{MINIO_ROOT_PASSWORD}",
     secure=False
 )
+print(minio_client)
 
 postgres_db = {
     "host": POSTGRESQL_SERVER,
@@ -163,12 +164,27 @@ class Authentication(BaseModel):
     username: str = Field(example="hoanvlh")
     password: str = Field(example="Ef27Xw34")
 
-@app.post("/Authentication", tags=["Authentication"])
+@app.post("/Login", tags=["Authentication"])
 def Authentication_api(input: Authentication):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         print(f"Connected to PostgreSQL database: {conn}")
         return Authentication_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+            }
+
+class Authentication_Logout(BaseModel):
+    username: str = Field(example="hoanvlh")
+
+@app.post("/Logout", tags=["Authentication"])
+def Authentication_Logout_api(input: Authentication_Logout):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        print(f"Connected to PostgreSQL database: {conn}")
+        return Authentication_Logout_function(conn, input)
     except Exception as e:
         return {
             "status": "error", 

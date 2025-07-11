@@ -341,8 +341,10 @@ def generate_dataframe(json_data: List[dict]) -> str:
     for person in tasks:
         for project in person["Dự án"]:
             for task in project["Thông tin"]:
-                start_dates.append(task["Kế hoạch - Từ"])
-                end_dates.append(task["Kế hoạch - Đến"])
+                if task.get("Kế hoạch - Từ"):
+                    start_dates.append(task["Kế hoạch - Từ"])
+                if task.get("Kế hoạch - Đến"):
+                    end_dates.append(task["Kế hoạch - Đến"])
 
     date_min = min(datetime.strptime(d, "%Y-%m-%d") for d in start_dates)
     date_max = max(datetime.strptime(d, "%Y-%m-%d") for d in end_dates)
@@ -444,30 +446,37 @@ def processing_json(file_path: BytesIO):
             continue
         members = str(row[Header[3]]).split(",")
 
-        days_task = (row[Header[6]] - row[Header[5]]).days + 1
+        start = pd.to_datetime(row[Header[5]])
+        end = pd.to_datetime(row[Header[6]])
+        days_task = (end - start).days + 1
+
+        # days_task = (row[Header[6]] - row[Header[5]]).days + 1
         weekend_days = amount_weekend_days(row[Header[5]], row[Header[6]])
         working_days = days_task - weekend_days
 
         # print(f"Days task: {days_task}")
 
-        if row[Header[1]]:
-            MoTaCongViec = row[Header[1]]  
-        else:
-            MoTaCongViec = "Không có mô tả công việc"
-            message.append(f'''Dự án {MaDuAn} có công việc không có mô tả công việc. Vui lòng kiểm tra lại.''')
+        # if row[Header[1]]:
+        #     MoTaCongViec = row[Header[1]]  
+        # else:
+        #     MoTaCongViec = "Không có mô tả công việc"
+        #     message.append(f'''Dự án {MaDuAn} có công việc không có mô tả công việc. Vui lòng kiểm tra lại.''')
 
-        if isinstance(row[Header[5]], datetime):
-            KeHoachTu = row[Header[5]].strftime("%Y-%m-%d")
-        else:
-            KeHoachTu = None
-            message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Không có ngày bắt đầu. Vui lòng kiểm tra lại.''')
+        # if isinstance(row[Header[5]], datetime):
+        #     KeHoachTu = row[Header[5]].strftime("%Y-%m-%d")
+        # else:
+        #     KeHoachTu = None
+        #     message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Không có ngày bắt đầu. Vui lòng kiểm tra lại.''')
             
-        if isinstance(row[Header[6]], datetime):
-            KeHoachDen = row[Header[6]].strftime("%Y-%m-%d")
-        else:
-            KeHoachDen = None
-            message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Không có ngày kết thúc. Vui lòng kiểm tra lại.''')
+        # if isinstance(row[Header[6]], datetime):
+        #     KeHoachDen = row[Header[6]].strftime("%Y-%m-%d")
+        # else:
+        #     KeHoachDen = None
+        #     message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Không có ngày kết thúc. Vui lòng kiểm tra lại.''')
 
+        MoTaCongViec = row[Header[1]] if row[Header[1]] else "Không có mô tả công việc"
+        KeHoachTu = row[Header[5]].strftime("%Y-%m-%d") if isinstance(row[Header[5]], datetime) else "Không có ngày bắt đầu"
+        KeHoachDen = row[Header[6]].strftime("%Y-%m-%d") if isinstance(row[Header[6]], datetime) else "Không có ngày kết thúc"
         print(f"MaDuAn: {MaDuAn}, MoTaCongViec: {MoTaCongViec}, KeHoachTu: {KeHoachTu}, KeHoachDen: {KeHoachDen}")
         print(f"working_days: {working_days}, days_task: {days_task}, weekend_days: {weekend_days}")
         # error_message = []
