@@ -114,3 +114,37 @@ def Authentication_Logout_function(conn, input):
             "status": "error", 
             "message": str(e)
             }
+
+def Authentication_ChangePassword_function(conn, input):
+    try:
+        user = input.username
+        password = input.password
+        newpassword = input.newpassword
+        if user:
+            cursor = conn.cursor()
+            query = """
+                SELECT "password" FROM "User" WHERE "username" = %s AND "password" = %s
+                """
+            cursor.execute(query, (user, password, ))
+            oldpassword = cursor.fetchone()
+            print(oldpassword)
+            if oldpassword:
+                update_query = """
+                    UPDATE "User" SET "password" = %s WHERE "username" = %s
+                """
+                cursor.execute(update_query, (newpassword, user,))
+                conn.commit()
+                return {
+                    "status": "success", 
+                    "message": "Đổi mật khẩu thành công!"
+                    }
+            else:
+                return {
+                    "status": "error", 
+                    "message": "Mật khẩu không đúng!"
+                    }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+            }

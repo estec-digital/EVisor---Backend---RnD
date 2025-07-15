@@ -190,3 +190,20 @@ def Authentication_Logout_api(input: Authentication_Logout):
             "status": "error", 
             "message": str(e)
             }
+
+class Authentication_ChangePassword(BaseModel):
+    username: str = Field(example="hoanvlh")
+    password: str = Field(example="Ef27Xw34")
+    newpassword: str = Field(example="123456")
+
+@app.post("/ChangePassword", tags=["Authentication"])
+def Authentication_ChangePassword_api(input: Authentication_ChangePassword):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        print(f"Connected to PostgreSQL database: {conn}")
+        return Authentication_ChangePassword_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+            }
