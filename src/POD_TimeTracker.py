@@ -12,6 +12,28 @@ from openpyxl.styles import PatternFill, Border, Side
 from fastapi.responses import JSONResponse
 from openpyxl.styles import Alignment
 
+def issummary_file(content: bytes) -> bool:
+    df = pd.read_excel(BytesIO(content))
+    # Các cột mong muốn
+    expected_columns = [
+        "STT",
+        "Tên nhân sự",
+        "Mã dự án",
+        "Mô tả công việc",
+        "Tên nhân sự - filter",
+        "Mã dự án - filter",
+        "Thời gian bắt đầu",
+        "Thời gian kết thúc"
+    ]
+    # Chuyển df.columns thành set để kiểm tra dễ hơn
+    actual_columns = set(df.columns)
+    # Kiểm tra tất cả các cột mong muốn đều có trong df
+    if all(col in actual_columns for col in expected_columns):
+        return True  # Là file summary
+    else:
+        return False  # Không phải file summary
+
+
 def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel):
     try:
         input_dict = input.dict()
@@ -32,6 +54,8 @@ def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel)
                 "Tên nhân sự",
                 "Mã dự án",
                 "Mô tả công việc",
+                "Tên nhân sự - filter",
+                "Mã dự án - filter",
                 "Thời gian bắt đầu",
                 "Thời gian kết thúc"
             ]
@@ -246,9 +270,24 @@ def check_overwork(df: pd.DataFrame) -> Optional[dict]:
     print("Overwork detected:", output)
     return output
 
+def addfilter_columns(df: pd.DataFrame):
+    cols = list(df.columns)
+    # Vị trí 'Mô tả công việc'
+    insert_at = cols.index("Mô tả công việc") + 1
+    cols = (
+        cols[:insert_at]
+        + ["Tên nhân sự - filter", "Mã dự án - filter"]
+        + cols[insert_at:]
+    )
+    df["Tên nhân sự - filter"] = df["Tên nhân sự"]
+    df["Mã dự án - filter"] = df["Mã dự án"]
+    df = df[cols]
+    return df
+
 def save_file_local(df: pd.DataFrame):
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"./minio/minio_data/POD/TimeTracker/Output/ES_{now}.xlsx"
+    df = addfilter_columns(df)
     with pd.ExcelWriter(filename, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, startrow=1, header=False)
         workbook = writer.book
@@ -288,15 +327,6 @@ def save_file_local(df: pd.DataFrame):
             cell.border = border
             cell.alignment = center_alignment  
         
-        # Áp dụng viền cho toàn bộ các ô dữ liệu
-        # for row in worksheet.iter_rows(min_row=2, max_row=1+len(df), min_col=1, max_col=len(df.columns)):
-        #     for cell in row:
-        #         cell.border = border
-        #         cell.alignment = center_alignment  
-        #         col_header = df.columns[cell.column - 1]
-        #         if str(col_header).startswith('2025'):
-        #             if isinstance(cell.value, (int, float)) and cell.value > 8:
-        #                 cell.fill = overwork_fill
         for row_idx, row in enumerate(worksheet.iter_rows(min_row=2, max_row=1+len(df), min_col=1, max_col=len(df.columns)), start=2):
             for cell in row:
                 cell.alignment = center_alignment
@@ -324,7 +354,7 @@ def save_file_local(df: pd.DataFrame):
                     if isinstance(cell.value, (int, float)) and cell.value > 8:
                         cell.fill = overwork_fill
                 
-        merge_cells_by_columns(worksheet, df, [0, 1, 2])
+        merge_cells_by_columns(worksheet, df, [0,1,2])
     print("✅ Xuất file thành công với ô đã được merge theo nhóm.")
     return filename, overwork
 

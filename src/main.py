@@ -91,6 +91,7 @@ def POD_TimeTracker_Merge_api(input: POD_TimeTracker_Merge):
 async def POD_TimeTracker_Upload_api(files: List[UploadFile] = File(...)):
     try:
         uploaded_paths = []
+        summary_file = ''
         for file in files:
             object_name = f"data/POD/TimeTracker/Input/{file.filename}"
             content = await file.read()
@@ -101,10 +102,15 @@ async def POD_TimeTracker_Upload_api(files: List[UploadFile] = File(...)):
                 length=len(content),
                 content_type=file.content_type
             )
-            uploaded_paths.append(object_name)
+            issummary = issummary_file(content)
+            if issummary:
+                summary_file = object_name
+            else:
+                uploaded_paths.append(object_name)
         return {
             "status": "success",
-            "path_files": uploaded_paths
+            "path_files": uploaded_paths,
+            "summary_file": summary_file
         }
     except Exception as e:
         return {
