@@ -16,6 +16,7 @@ services:
 
   minio-init:
     image: minio/mc
+    container_name: minioinit
     depends_on:
       - minio
     volumes:
@@ -43,38 +44,41 @@ services:
       - ./postgres/postgres_data:/postgresql/data
     restart: unless-stopped
 
-  # weaviate:
-  #   image: cr.weaviate.io/semitechnologies/weaviate:1.32.0
-  #   command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
-  #   ports:
-  #     - "8080:8080"
-  #     - "50051:50051"
-  #   volumes:
-  #     - weaviate_data:/var/lib/weaviate
-  #   restart: on-failure:0
-  #   environment:
-  #     QUERY_DEFAULTS_LIMIT: 25
-  #     AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-  #     PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-  #     ENABLE_API_BASED_MODULES: 'true'
-  #     ENABLE_MODULES: 'text2vec-transformers'
-  #     TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
-  #     CLUSTER_HOSTNAME: 'node1'
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.32.0
+    container_name: weaviate
+    command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      ENABLE_API_BASED_MODULES: 'true'
+      ENABLE_MODULES: 'text2vec-transformers'
+      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
+      CLUSTER_HOSTNAME: 'node1'
   
-  # t2v-transformers:
-  #   image: semitechnologies/transformers-inference:sentence-transformers-paraphrase-mpnet-base-v2
-  #   environment:
-  #     ENABLE_CUDA: '0'  # bật GPU nếu có
-  #   ports:
-  #     - "8081:8080"
-  # verba:
-  #   image: semitechnologies/verba:latest
-  #   ports:
-  #     - "8090:80"
-  #   environment:
-  #     - VERBA_WEAVIATE_URL=http://weaviate:8080
-  #   depends_on:
-  #     - weaviate
+  t2v-transformers:
+    image: semitechnologies/transformers-inference:sentence-transformers-paraphrase-mpnet-base-v2
+    container_name: transformers
+    environment:
+      ENABLE_CUDA: '0'
+    ports:
+      - "8081:8080"
+  verba:
+    image: semitechnologies/verba:latest
+    container_name: verba
+    ports:
+      - "8090:80"
+    environment:
+      - VERBA_WEAVIATE_URL=http://weaviate:8080
+    depends_on:
+      - weaviate
 
   portainer:
     image: ${PORTAINER_IMAGE}
@@ -90,4 +94,4 @@ volumes:
   minio_data:
   postgres_data:
   portainer_data:
-  # weaviate_data:
+  weaviate_data:
