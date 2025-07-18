@@ -62,7 +62,6 @@ def Authentication_function(conn, input):
     
     finally:
         cursor.close()
-        conn.close()
 
 def check_session(conn , user_id: str) -> bool:
     """
@@ -93,7 +92,6 @@ def check_session(conn , user_id: str) -> bool:
     
     finally:
         cursor.close()
-        conn.close()
 
 def Authentication_Logout_function(conn, input):
     try:

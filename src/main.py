@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from minio import Minio
 import pandas as pd
@@ -10,6 +10,7 @@ from datetime import datetime
 from src.POD_TimeTracker import *
 from src.Authentication import *
 from src.DB_Connection import *
+from src.WorkManagement import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -164,7 +165,79 @@ def POD_TimeTracker_Download_postapi(input: POD_TimeTracker_Download):
             "status": "error", 
             "message": str(e)
             }
-    
+
+@app.post("/WorkManagement_Processing", tags=["General"])
+async def WorkManagement_Processing_api(file: UploadFile = File(...), user_id: str = Form(...)):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, user_id)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            object_name = f"data/General/WorkManagement/Input/{file.filename}"
+            print("object_name:", object_name)
+            content = await file.read()
+            print("minio_client:", minio_client)
+            minio_client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                BytesIO(content),
+                length=len(content),
+                content_type=file.content_type
+            )
+            issummary = issummary_file(content)
+            if issummary:
+                print("ismmary:", issummary)
+                conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+                workmanagement = WorkManagement_Processing_function(content, conn, user_id)
+                return {
+                    "status": "success",
+                    "message": "Đã tạo quản lý kế hoạch!"
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Sai định dạng cấu trúc tài liệu quản lý kế hoạch!"
+                }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+class FilterModel(BaseModel):
+    full_name: Optional[List[str]] = []
+    project_code: Optional[List[str]] = []
+    start_date: Optional[datetime] = "2025-01-01T09:48:50.222Z"
+    end_date: Optional[datetime] = "2025-03-17T09:48:50.222Z"
+
+class WorkManagement_View(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    filter: FilterModel
+    pagination: int = Field(default=1, example=1)
+    page_size: int = Field(default=20, example=20)
+
+@app.post("/WorkManagement_View", tags=["General"])
+async def WorkManagement_View_api(input: WorkManagement_View):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WorkManagement_View_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 ### Authentication
 class Authentication(BaseModel):
     username: str = Field(example="hoanvlh")

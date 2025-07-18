@@ -5,3 +5,4 @@ minio
 python-dotenv
 openpyxl
 psycopg2-binary
+weaviate-client

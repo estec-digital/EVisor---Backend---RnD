@@ -27,3 +27,14 @@ CREATE TABLE IF NOT EXISTS "Session" (
     "created_at" TIMESTAMP DEFAULT NOW(),
     "expires_at" TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS "WorkManagement" (
+    "task_id" INTEGER,
+    "owner" VARCHAR(255) NOT NULL,
+    "full_name" VARCHAR(255) NOT NULL,
+    "project_code" VARCHAR(255) NOT NULL,
+    "description" VARCHAR(255) NOT NULL,
+    "start_date" TIMESTAMP,
+    "end_date" TIMESTAMP,
+    "QTY" DECIMAL
+);
