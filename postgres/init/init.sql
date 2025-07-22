@@ -36,5 +36,5 @@ CREATE TABLE IF NOT EXISTS "WorkManagement" (
     "description" VARCHAR(255) NOT NULL,
     "start_date" TIMESTAMP,
     "end_date" TIMESTAMP,
-    "QTY" DECIMAL
+    "QTY" DECIMAL(10, 2)
 );

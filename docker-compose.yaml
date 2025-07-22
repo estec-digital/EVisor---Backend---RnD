@@ -74,7 +74,7 @@ services:
     image: semitechnologies/verba:latest
     container_name: verba
     ports:
-      - "8090:80"
+      - "8082:8000"
     environment:
       - VERBA_WEAVIATE_URL=http://weaviate:8080
     depends_on:
