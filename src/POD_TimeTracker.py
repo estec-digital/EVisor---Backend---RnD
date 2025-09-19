@@ -11,30 +11,150 @@ from datetime import datetime, timedelta
 from openpyxl.styles import PatternFill, Border, Side
 from fastapi.responses import JSONResponse
 from openpyxl.styles import Alignment
+import os
+import jpype, sys
+import os, re, json
+import tempfile
+from collections import Counter
 
-def issummary_file(content: bytes) -> bool:
-    df = pd.read_excel(BytesIO(content))
-    # Các cột mong muốn
-    expected_columns = [
-        "STT",
-        "Tên nhân sự",
-        "Mã dự án",
-        "Mô tả công việc",
-        "Tên nhân sự - filter",
-        "Mã dự án - filter",
-        "Thời gian bắt đầu",
-        "Thời gian kết thúc"
-    ]
-    # Chuyển df.columns thành set để kiểm tra dễ hơn
-    actual_columns = set(df.columns)
-    # Kiểm tra tất cả các cột mong muốn đều có trong df
-    if all(col in actual_columns for col in expected_columns):
-        return True  # Là file summary
+# def issummary_file(content: bytes) -> bool:
+#     df = pd.read_excel(BytesIO(content))
+#     # Các cột mong muốn
+#     expected_columns = [
+#         "STT",
+#         "Tên nhân sự",
+#         "Mã dự án",
+#         "Mô tả công việc",
+#         "Tên nhân sự - filter",
+#         "Mã dự án - filter",
+#         "Thời gian bắt đầu",
+#         "Thời gian kết thúc"
+#     ]
+#     # Chuyển df.columns thành set để kiểm tra dễ hơn
+#     actual_columns = set(df.columns)
+#     # Kiểm tra tất cả các cột mong muốn đều có trong df
+#     if all(col in actual_columns for col in expected_columns):
+#         return True  # Là file summary
+#     else:
+#         return False  # Không phải file summary
+def duplicate_project_code(list_codes: List[List[str]]) -> bool:
+    print("list_codes:", list_codes)
+    counter = Counter(list_codes)
+    duplicates = [code for code, count in counter.items() if count > 1]
+    print("duplicates:", duplicates)
+    return duplicates
+
+def issummary_file(content: bytes, filename: str, jvm_path) -> bool:
+    ext = os.path.splitext(filename)[1].lower()
+    
+    if ext in [".xlsx", ".xls", ".csv"]:
+        # --- Xử lý Excel ---
+        df = pd.read_excel(BytesIO(content))
+        actual_columns = set(df.columns)
+        expected_columns = [
+            "STT",
+            "Tên nhân sự",
+            "Mã dự án",
+            "Mô tả công việc",
+            "Tên nhân sự - filter",
+            "Mã dự án - filter",
+            "Thời gian bắt đầu",
+            "Thời gian kết thúc"
+        ]
+        if all(col in actual_columns for col in expected_columns):
+            codes = df["Mã dự án"].dropna().unique().tolist()
+        else:
+            # print(df.head())
+            codes = [df.iloc[4, 4]]
+        return all(col in actual_columns for col in expected_columns), codes
+
+    elif ext == ".mpp":
+        # --- Lưu file tạm và tự xóa---
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mpp") as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            actual_columns, project_code = mpp_isissummary_file(
+                mpp_file=tmp_path,
+                mpxj_dir="./mpxj",
+                json_output_path=None,
+                jvm_path=jvm_path
+            )
+            print("Parsed JSON from MPP:", actual_columns)
+            expected_columns = [
+                "Hours", 
+                "Unit", 
+                "Name", 
+                "Resource Names", 
+                "Notes", 
+                "Finish", 
+                "Working place", 
+                "Start", 
+                "Duration", 
+                "ID", 
+                "% Complete"
+            ]
+            project_code = [project_code] if project_code else []
+            # print("Extracted project codes:", codes)
+            return all(col not in actual_columns for col in expected_columns), project_code
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
     else:
-        return False  # Không phải file summary
+        return False
 
+def mpp_isissummary_file(mpp_file, mpxj_dir, json_output_path, jvm_path):
+    # --- Build classpath ---
+    lib_path = os.path.join(mpxj_dir, "lib")
+    mpxj_jar = os.path.join(mpxj_dir, "mpxj.jar")
+    jars = [os.path.join(lib_path, jar) for jar in os.listdir(lib_path) if jar.endswith(".jar")]
+    jars.append(mpxj_jar)
+    classpath = ";".join(jars)
 
-def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel):
+    # --- Start JVM nếu chưa chạy ---
+    if not jpype.isJVMStarted():
+        jpype.startJVM(jvm_path, "-ea", f"-Djava.class.path={classpath}", convertStrings=True)
+
+    # --- Đọc MPP ---
+    MPPReader = jpype.JClass("org.mpxj.mpp.MPPReader")
+    reader = MPPReader()
+    project = reader.read(mpp_file)
+
+    # === Task Data Extraction
+    task_data = []
+    project_code = None
+    for task in project.getTasks():
+        if task.getName() is None:
+            continue
+        if task.getID() == 0 and project_code is None:
+            project_code = extract_project_code(task.getName())
+
+        task_data.append({
+        "ID": task.getID(),
+        "Name": task.getName(),
+        "Start": str(task.getStart()).split("T")[0] if task.getStart() else "",
+        "Finish": str(task.getFinish()).split("T")[0] if task.getFinish() else "",
+        "Duration": str(task.getDuration()),
+        "% Complete": task.getPercentageComplete(),
+        "Resource Names": ", ".join([
+            r.getName()
+            for a in task.getResourceAssignments()
+            if (r := a.getResource()) and r.getName()
+        ]) or "unassigned",
+        "Working place": task.getText(3),
+        "Hours": task.getText(2),
+        "Unit": task.getText(4),
+        "Notes": task.getNotes()
+        })
+
+    if not task_data:
+        return []
+
+    df = pd.DataFrame(task_data)
+    # print("project_code:", project_code)
+    return set(df.columns), project_code
+
+def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel, jvm_path = "C:/Program Files/Eclipse Adoptium/jdk-21.0.7.6-hotspot/bin/server/jvm.dll"):
     try:
         input_dict = input.dict()
         request_id = input_dict.get("request_id", "evisor-1234567890")
@@ -43,6 +163,7 @@ def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel)
         summary_file = input_dict.get("summary_file", None).split("estec/")[-1]
         print(f"Summary file: {summary_file}")
         path_files = input_dict.get("path_files", [])
+        duplicate = input_dict.get("duplicate", [])
 
         obj = minio_client.get_object("estec", summary_file)
         data = obj.read()
@@ -61,11 +182,34 @@ def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel)
             ]
         df_final[cols_to_fill] = df_final[cols_to_fill].fillna(method="ffill")
         results = []
+        print(f"Summary file: {summary_file}")
+
+        if "Mã dự án - filter" in df_final.columns:
+            if duplicate:  # Nếu list duplicate không rỗng
+                before = len(df_final)
+                df_final = df_final[~df_final["Mã dự án - filter"].isin(duplicate)].reset_index(drop=True)
+                after = len(df_final)
+                print(f"🔎 Đã loại bỏ {before - after} dòng có Mã dự án - filter nằm trong duplicate")
+
         for file_path in path_files:
             obj = minio_client.get_object("estec", file_path)
             data = obj.read()
             file_stream = BytesIO(data)
-            json = processing_json(file_stream)
+            # json = processing_json(file_stream)
+
+            # Phân loại theo định dạng file
+            if file_path.lower().endswith((".xls", ".xlsx")):
+                json = processing_json(file_stream)
+
+            elif file_path.lower().endswith(".mpp"):
+                # Lưu tạm file .mpp xuống local để MPXJ đọc
+                tmp_path = f"{os.path.basename(file_path)}"
+                with open(tmp_path, "wb") as f:
+                    f.write(data)
+                # Gọi hàm đọc MPP (bạn đã viết)
+                mpxj_dir = "./mpxj"  # thư mục chứa mpxj.jar + lib/
+                json = mpp_file_processing(tmp_path, mpxj_dir, None, jvm_path)
+                
             if isinstance(json, dict) and json.get("status") == "error":
                 return json
             results.append(json)
@@ -75,6 +219,7 @@ def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel)
             df_final = pd.concat([df_final, df], ignore_index=True)
 
         df_final = df_final.sort_values(by=["STT", "Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        df_final = df_final.drop_duplicates(subset=["Tên nhân sự", "Mã dự án", "Mô tả công việc", "Thời gian bắt đầu", "Thời gian kết thúc"]).reset_index(drop=True)
         print("df_final:", df_final.head())
         output_path_local, overwork = save_file_local(df_final)
         output_path_minio = save_file_minio(minio_client, output_path_local)
@@ -112,13 +257,13 @@ def POD_TimeTracker_Download_function(minio_client: Minio, input: BaseModel, MIN
 
 def POD_TimeTracker_Getfile_function(minio_client: Minio, input: BaseModel, MINIO_BUCKET: str):
     """
-    Hàm để lấy file từ MinIO và chuyển đổi nội dung sang định dạng JSON.
-    Tham số:
-    - minio_client: Đối tượng Minio để tương tác với MinIO.
-    - input: Đối tượng chứa thông tin đầu vào, bao gồm request_id, user_id và path_file.
-    Trả về:
-    - dict: Kết quả xử lý, bao gồm status và dữ liệu JSON.
-    Nếu có lỗi xảy ra, trả về dict chứa status là "error" và message mô tả lỗi.
+        Hàm để lấy file từ MinIO và chuyển đổi nội dung sang định dạng JSON.
+        Tham số:
+        - minio_client: Đối tượng Minio để tương tác với MinIO.
+        - input: Đối tượng chứa thông tin đầu vào, bao gồm request_id, user_id và path_file.
+        Trả về:
+        - dict: Kết quả xử lý, bao gồm status và dữ liệu JSON.
+        Nếu có lỗi xảy ra, trả về dict chứa status là "error" và message mô tả lỗi.
     """
     try:
         path_file = input.path_file
@@ -141,7 +286,7 @@ def POD_TimeTracker_Getfile_function(minio_client: Minio, input: BaseModel, MINI
             "message": str(e)
         }
 
-def POD_TimeTracker_Merge_function(minio_client: Minio, input: BaseModel):
+def POD_TimeTracker_Merge_function(minio_client: Minio, input: BaseModel, jvm_path = "C:/Program Files/Eclipse Adoptium/jdk-21.0.7.6-hotspot/bin/server/jvm.dll"):
     """
     Hàm xử lý dữ liệu từ MinIO và trả về kết quả.
     Tham số:
@@ -157,24 +302,51 @@ def POD_TimeTracker_Merge_function(minio_client: Minio, input: BaseModel):
         user_id = input_dict.get("user_id", "evisor")
         start_time = input_dict.get("start_time")
         path_files = input_dict.get("path_files", [])
+        duplicate = input_dict.get("duplicate", [])
+        summary_file = input_dict.get("summary_file", None)
 
         if not path_files:
             return {"status": "error", "message": "No files provided in path_files."}
         
         df_final = pd.DataFrame()
         results = []
+
+        print(f"Summary file: {summary_file}")
+        if summary_file:
+            df_final = pd.read_excel(BytesIO(minio_client.get_object("estec", summary_file).read()), engine='openpyxl')
+            print("TEST",df_final.head())
+
+            df_final = df_final[~df_final["Mã dự án - filter"].isin(duplicate)].reset_index(drop=True)
+
         for file_path in path_files:
             obj = minio_client.get_object("estec", file_path)
             data = obj.read()
             file_stream = BytesIO(data)
-            json = processing_json(file_stream)
-            if isinstance(json, dict) and json.get("status") == "error":
-                return json
-            results.append(json)
-            df = generate_dataframe(json)
+
+            # Phân loại theo định dạng file
+            if file_path.lower().endswith((".xls", ".xlsx")):
+                json_data = processing_json(file_stream)
+
+            elif file_path.lower().endswith(".mpp"):
+                # Lưu tạm file .mpp xuống local để MPXJ đọc
+                tmp_path = f"{os.path.basename(file_path)}"
+                with open(tmp_path, "wb") as f:
+                    f.write(data)
+                # Gọi hàm đọc MPP (bạn đã viết)
+                mpxj_dir = "./mpxj"  # thư mục chứa mpxj.jar + lib/
+                json_data = mpp_file_processing(tmp_path, mpxj_dir, None, jvm_path)
+            else:
+                return {"status": "error", "message": f"Unsupported file type: {file_path}"}
+            
+            if isinstance(json_data, dict) and json_data.get("status") == "error":
+                return json_data
+            
+            results.append(json_data)
+            df = generate_dataframe(json_data)
             df_final = pd.concat([df_final, df], ignore_index=True) 
         
         df_final = df_final.sort_values(by=["STT", "Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        df_final = df_final.drop_duplicates(subset=["Tên nhân sự", "Mã dự án", "Mô tả công việc", "Thời gian bắt đầu", "Thời gian kết thúc"]).reset_index(drop=True)
         print("df_final:", df_final.head())
         output_path_local, overwork = save_file_local(df_final)
         output_path_minio = save_file_minio(minio_client, output_path_local)
@@ -194,6 +366,134 @@ def POD_TimeTracker_Merge_function(minio_client: Minio, input: BaseModel):
             "status": "error",
             "message": str(e)
         }
+
+def mpp_file_processing(mpp_file, mpxj_dir,json_output_path,jvm_path):
+    # === CONFIGURATION ===
+    lib_path = os.path.join(mpxj_dir, "lib")
+    mpxj_jar = os.path.join(mpxj_dir, "mpxj.jar")
+    log_config_path = os.path.abspath("./mpxj/log4j2.xml")
+
+    # === Build classpath
+    jars = [os.path.join(lib_path, jar) for jar in os.listdir(lib_path) if jar.endswith(".jar")]
+    jars.append(mpxj_jar)
+    classpath = ";".join(jars)  # Windows uses ; separator
+
+    # === Start JVM
+    if not jpype.isJVMStarted():
+        jpype.startJVM(jvm_path, "-ea", f"-Djava.class.path={classpath}",
+        f"-Dlog4j.configurationFile={log_config_path}",
+         convertStrings=True)
+
+    # === Load Project
+    MPPReader = jpype.JClass("org.mpxj.mpp.MPPReader")
+    reader = MPPReader()
+    project = reader.read(mpp_file)
+
+    # === Task Data Extraction
+    task_data = []
+    for task in project.getTasks():
+        if task.getName() is None:
+            continue
+
+        task_data.append({
+        "ID": task.getID(),
+        "Name": task.getName(),
+        "Start": str(task.getStart()).split("T")[0] if task.getStart() else "",
+        "Finish": str(task.getFinish()).split("T")[0] if task.getFinish() else "",
+        "Duration": str(task.getDuration()),
+        "% Complete": task.getPercentageComplete(),
+        "Resource Names": ", ".join([
+            r.getName()
+            for a in task.getResourceAssignments()
+            if (r := a.getResource()) and r.getName()
+        ]) or "unassigned",
+
+        "Working place": task.getText(3),   # Text3
+        "Hours": task.getText(2),           # Text2
+        "Unit": task.getText(4),            # Text4
+        "Notes": task.getNotes()
+        })
+
+    # JSON processing
+    result = {}
+    ma_du_an = None
+    for i in task_data:
+        if i["ID"] == 0:
+            ma_du_an = extract_project_code(i["Name"])
+        if i["Resource Names"] != "unassigned":
+            members = str(i["Resource Names"]).split(",")
+            if (i["Working place"] != None ) and ( i["Hours"] != None):
+                start = pd.to_datetime(i["Start"])
+                end = pd.to_datetime(i["Finish"])
+                days_task = (end - start).days + 1
+                # weekend_days = amount_weekend_days(start, end)
+                # working_days = days_task - weekend_days
+                working_days = days_task
+                QTY = round(float(i["Hours"])/working_days, 2) if working_days > 0 else 0
+                task = {
+                    "Mô tả công việc": i["Name"],
+                    "Kế hoạch - Từ": i["Start"],
+                    "Kế hoạch - Đến": i["Finish"],
+                    "QTY": QTY,
+                    "Nơi làm việc": i["Working place"]
+                }
+
+                for name in members:
+                    name = name.strip()
+                    if not name or name.lower() == "none":
+                        continue
+                    if name not in result:
+                        result[name] = {}
+                    if ma_du_an not in result[name]:
+                        result[name][ma_du_an] = []
+                    result[name][ma_du_an].append(task)
+
+    # Processing output clean
+    output = []
+    for name, projects in result.items():
+        if not name.strip():
+            continue
+        output.append({
+            "Tên nhân sự": name,
+            "Dự án": [
+                {
+                    "Mã dự án": code,
+                    "Thông tin": tasks
+                } for code, tasks in projects.items()
+            ]
+        })
+
+    # Clean the output before returning and/or writing to JSON
+    json_output = clean_json(output)
+
+    # if json_output_path:
+    #     with open(json_output_path, "w", encoding="utf-8") as f:
+    #         json.dump(json_output, f, ensure_ascii=False, indent=2)
+    print("json_output:", json_output)
+
+    return json_output
+
+def extract_project_code(name):
+    if not name:
+        return ""
+    # Match code-like prefix (e.g. ES296-A2402)
+    match = re.match(r"\s*([A-Z]+\d{3,}-[A-Z0-9]+)", name)
+    return match.group(1) if match else name.strip()
+
+def clean_json(data):
+    if isinstance(data, dict):
+        return {k: clean_json(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [clean_json(item) for item in data]
+    else:
+        return safe_convert(data)
+    
+def safe_convert(obj):
+    if pd.isna(obj):  # Handles NaN and NaT
+        return None
+    if isinstance(obj, pd.Timestamp):
+        return obj.strftime("%Y-%m-%d")
+    return obj
 
 def get_weekend_columns(df: pd.DataFrame) -> List[int]:
     """
@@ -241,9 +541,12 @@ def check_overwork(df: pd.DataFrame) -> Optional[dict]:
     """
     # Lấy các cột ngày
     date_cols = [col for col in df.columns if str(col).startswith('2025')]
-
+    for col in date_cols:
+        df[col] = df[col].astype(str).str.extract(r'(\d+)').astype(float).fillna(0)
     # Gom nhóm theo Tên nhân sự + cột ngày
+
     result = df.groupby('Tên nhân sự')[date_cols].sum().fillna(0)
+    # print("Grouped result:", result)
 
     # Lọc chỗ > 8
     overwork = result[result > 8].dropna(how='all')
@@ -284,10 +587,32 @@ def addfilter_columns(df: pd.DataFrame):
     df = df[cols]
     return df
 
+def get_hours(cell_value) -> float:
+    """
+    Trích số giờ từ ô Excel, ví dụ:
+    '8 | S' -> 8.0
+    '12 | V' -> 12.0
+    None, '' -> 0
+    """
+    if cell_value is None:
+        return 0.0
+    raw = str(cell_value).strip()
+    if not raw:
+        return 0.0
+    try:
+        return float(raw.split('|')[0].strip())
+    except ValueError:
+        return 0.0
+
 def save_file_local(df: pd.DataFrame):
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"./minio/minio_data/POD/TimeTracker/Output/ES_{now}.xlsx"
-    df = addfilter_columns(df)
+    required_cols = ["Tên nhân sự - filter", "Mã dự án - filter"]
+    if not all(col in df.columns for col in required_cols):
+        df = addfilter_columns(df)
+    else:
+        df = df.drop(columns=required_cols)
+        df = addfilter_columns(df) 
     with pd.ExcelWriter(filename, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, startrow=1, header=False)
         workbook = writer.book
@@ -311,6 +636,8 @@ def save_file_local(df: pd.DataFrame):
         overwork_warning_fill = PatternFill(start_color="f7dc6f", end_color="f7dc6f", fill_type="solid")
 
         normal_fill = PatternFill(start_color="E2F0CB", end_color="E2F0CB", fill_type="solid")
+
+        white_fill = PatternFill(start_color="ffffff", end_color="ffffff", fill_type="solid")
 
         # Xác định các cột là ngày cuối tuần
         weekend_cols = get_weekend_columns(df)
@@ -347,12 +674,15 @@ def save_file_local(df: pd.DataFrame):
                                     break
                         if overwork_flag:
                             break
-                    if isinstance(cell.value, (int, float)) and cell.value < 8:
-                        cell.fill = normal_fill
-                    if isinstance(cell.value, (int, float)) and overwork_flag:
-                        cell.fill = overwork_warning_fill
-                    if isinstance(cell.value, (int, float)) and cell.value > 8:
-                        cell.fill = overwork_fill
+
+                    val = get_hours(cell.value)
+                    if val > 0:  # chỉ xử lý ô có giá trị
+                        if val > 8:
+                            cell.fill = overwork_fill
+                        elif overwork_flag and val > 0:
+                            cell.fill = overwork_warning_fill
+                        elif val > 0:
+                            cell.fill = normal_fill
                 
         merge_cells_by_columns(worksheet, df, [0,1,2])
     print("✅ Xuất file thành công với ô đã được merge theo nhóm.")
@@ -392,6 +722,7 @@ def generate_dataframe(json_data: List[dict]) -> str:
                 start = task["Kế hoạch - Từ"]
                 end = task["Kế hoạch - Đến"]
                 QTY = task["QTY"]
+                place = task["Nơi làm việc"]
                 
                 row = {
                     "STT": stt_global,
@@ -408,9 +739,9 @@ def generate_dataframe(json_data: List[dict]) -> str:
                 for date in calendar_days:
                     if start_date <= date <= end_date:
                         if date.weekday() < 5:
-                            row[date.strftime("%Y-%m-%d")] = QTY
+                            row[date.strftime("%Y-%m-%d")] = f"{QTY} | {place}"
                         else:
-                            row[date.strftime("%Y-%m-%d")] = 0
+                            row[date.strftime("%Y-%m-%d")] = f"{QTY} | {place}"
                     else:
                         row[date.strftime("%Y-%m-%d")] = None
 
@@ -481,8 +812,9 @@ def processing_json(file_path: BytesIO):
         days_task = (end - start).days + 1
 
         # days_task = (row[Header[6]] - row[Header[5]]).days + 1
-        weekend_days = amount_weekend_days(row[Header[5]], row[Header[6]])
-        working_days = days_task - weekend_days
+        # weekend_days = amount_weekend_days(row[Header[5]], row[Header[6]])
+        # working_days = days_task - weekend_days
+        working_days = days_task
 
         # print(f"Days task: {days_task}")
 
@@ -508,17 +840,17 @@ def processing_json(file_path: BytesIO):
         KeHoachTu = row[Header[5]].strftime("%Y-%m-%d") if isinstance(row[Header[5]], datetime) else "Không có ngày bắt đầu"
         KeHoachDen = row[Header[6]].strftime("%Y-%m-%d") if isinstance(row[Header[6]], datetime) else "Không có ngày kết thúc"
         print(f"MaDuAn: {MaDuAn}, MoTaCongViec: {MoTaCongViec}, KeHoachTu: {KeHoachTu}, KeHoachDen: {KeHoachDen}")
-        print(f"working_days: {working_days}, days_task: {days_task}, weekend_days: {weekend_days}")
+        # print(f"working_days: {working_days}, days_task: {days_task}, weekend_days: {weekend_days}")
         # error_message = []
         # message = ""
         
-        if working_days <= 0:
+        # if working_days <= 0:
             # return {
             #     "status": "error",
             #     "message": f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Có ngày làm việc rơi vào Thứ 7 hoặc Chủ nhật. Vui lòng điều chỉnh lại ngày bắt đầu & kết thúc. Ngày bắt đầu hiện tại: {KeHoachTu}, Ngày kết thúc hiện tại: {KeHoachDen}.'''
             # }
             # message += f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Có ngày làm việc rơi vào Thứ 7 hoặc Chủ nhật. Vui lòng điều chỉnh lại ngày bắt đầu & kết thúc. Ngày bắt đầu hiện tại: {KeHoachTu}, Ngày kết thúc hiện tại: {KeHoachDen}.\n'''
-            message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Có ngày làm việc rơi vào Thứ 7 hoặc Chủ nhật. Vui lòng điều chỉnh lại ngày bắt đầu & kết thúc. Ngày bắt đầu hiện tại: {KeHoachTu}, Ngày kết thúc hiện tại: {KeHoachDen}.''')
+            # message.append(f'''Dự án {MaDuAn} có công việc {MoTaCongViec}: Có ngày làm việc rơi vào Thứ 7 hoặc Chủ nhật. Vui lòng điều chỉnh lại ngày bắt đầu & kết thúc. Ngày bắt đầu hiện tại: {KeHoachTu}, Ngày kết thúc hiện tại: {KeHoachDen}.''')
         QTY = round(float(row[Header[8]])/working_days, 2) if working_days > 0 else 0
         NoiLamViec = row[Header[7]] if row[Header[7]] else "Không có nơi làm việc"
         # if QTY > 8:

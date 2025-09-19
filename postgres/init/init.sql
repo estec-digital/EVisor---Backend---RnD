@@ -29,12 +29,14 @@ CREATE TABLE IF NOT EXISTS "Session" (
 );
 
 CREATE TABLE IF NOT EXISTS "WorkManagement" (
-    "task_id" INTEGER,
+    "task_id" SERIAL PRIMARY KEY,
     "owner" VARCHAR(255) NOT NULL,
     "full_name" VARCHAR(255) NOT NULL,
     "project_code" VARCHAR(255) NOT NULL,
     "description" VARCHAR(255) NOT NULL,
     "start_date" TIMESTAMP,
     "end_date" TIMESTAMP,
-    "QTY" DECIMAL(10, 2)
+    "QTY" DECIMAL(10, 2),
+    "site" VARCHAR(255) NOT NULL,
+    "status" INTEGER DEFAULT 0
 );

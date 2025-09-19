@@ -29,6 +29,8 @@ POSTGRES_DB = os.getenv("POSTGRES_DB")
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
+JVM_PATH = os.getenv("JVM_PATH")
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -65,7 +67,8 @@ class POD_TimeTracker_Merge(BaseModel):
     user_id: str = Field(default="hoanvlh", example="hoanvlh")
     start_time: datetime = Field(example="2025-06-23T15:20:00")
     path_files: List[str] = Field(example=["data/POD/TimeTracker/Input/Form mau 1.xlsx", "data/POD/TimeTracker/Input/Form mau 2.xlsx"])
-    summary_file: Optional[str] = Field(default=None, example="data/POD/TimeTracker/Output/ES_20250704_104529.xlsx")
+    summary_file: Optional[str] = Field(default=None, example="data/POD/TimeTracker/Output/ES_20250904_110039.xlsx")
+    duplicate: Optional[List[str]] = Field(default=["ES192-5-A2302"], example=["ES192-5-A2302"])
 
 @app.post("/POD_TimeTracker_Merge", tags=["POD"])
 def POD_TimeTracker_Merge_api(input: POD_TimeTracker_Merge):
@@ -79,9 +82,9 @@ def POD_TimeTracker_Merge_api(input: POD_TimeTracker_Merge):
                 }
         else:
             if input.summary_file is None:
-                return POD_TimeTracker_Merge_function(minio_client, input)
+                return POD_TimeTracker_Merge_function(minio_client, input, JVM_PATH)
             else:
-                return POD_TimeTracker_Merge_Manual_function(minio_client, input)
+                return POD_TimeTracker_Merge_Manual_function(minio_client, input, JVM_PATH)
     except Exception as e:
         return {
             "status": "error", 
@@ -92,10 +95,14 @@ def POD_TimeTracker_Merge_api(input: POD_TimeTracker_Merge):
 async def POD_TimeTracker_Upload_api(files: List[UploadFile] = File(...)):
     try:
         uploaded_paths = []
-        summary_file = ''
+        list_codes = []
+        summary_file = ""
+
         for file in files:
             object_name = f"data/POD/TimeTracker/Input/{file.filename}"
             content = await file.read()
+
+            # Upload MinIO
             minio_client.put_object(
                 MINIO_BUCKET,
                 object_name,
@@ -103,21 +110,32 @@ async def POD_TimeTracker_Upload_api(files: List[UploadFile] = File(...)):
                 length=len(content),
                 content_type=file.content_type
             )
-            issummary = issummary_file(content)
+
+            issummary, codes = issummary_file(content, object_name, JVM_PATH)
+            print("issummary:", issummary)
+
+            # Collect codes
+            list_codes.extend(codes)
+
             if issummary:
                 summary_file = object_name
             else:
                 uploaded_paths.append(object_name)
+
+        duplicate = duplicate_project_code(list_codes)
+
         return {
             "status": "success",
             "path_files": uploaded_paths,
-            "summary_file": summary_file
+            "summary_file": summary_file,
+            "duplicate": duplicate
         }
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
+
     
 class POD_TimeTracker_Getfile(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
@@ -188,7 +206,7 @@ async def WorkManagement_Processing_api(file: UploadFile = File(...), user_id: s
                 length=len(content),
                 content_type=file.content_type
             )
-            issummary = issummary_file(content)
+            issummary = issummary_file(content, object_name, JVM_PATH)
             if issummary:
                 print("ismmary:", issummary)
                 conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
@@ -238,6 +256,48 @@ async def WorkManagement_View_api(input: WorkManagement_View):
             "status": "error",
             "message": str(e)
         }
+
+class Form(BaseModel):
+    id: Optional[int] = None
+    owner: Optional[str] = ""
+    full_name: Optional[str] = ""
+    project_code: Optional[str] = ""
+    description: Optional[str] = ""
+    start_date: Optional[datetime] = Field(default=None, example="2025-01-01T09:48:50.222Z")
+    end_date: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    QTY: Optional[float] = None
+    site: Optional[str] = ""
+    status: Optional[int] = None
+
+class WorkManagement_DML(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
+    form: Form
+
+@app.post("/WorkManagement_DML", tags=["General"])
+async def WorkManagement_DML_api(input: WorkManagement_DML):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            if input.dml_action == "delete":
+                return WorkManagement_DML_Delete_function(input, conn)
+            elif input.dml_action == "insert":
+                return WorkManagement_DML_Insert_function(input, conn)
+            elif input.dml_action == "update":
+                return WorkManagement_DML_Update_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 ### Authentication
 class Authentication(BaseModel):
     username: str = Field(example="hoanvlh")

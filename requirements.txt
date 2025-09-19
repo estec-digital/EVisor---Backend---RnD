@@ -6,3 +6,5 @@ python-dotenv
 openpyxl
 psycopg2-binary
 weaviate-client
+xlrd>=2.0.1
+jpype1

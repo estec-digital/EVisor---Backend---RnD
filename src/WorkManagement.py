@@ -16,8 +16,19 @@ from dateutil import parser
 def WorkManagement_Processing_function(content: bytes, conn, user_id):
     try:
         df = pd.read_excel(BytesIO(content))
+        print("DF:",df.tail(10))
         date_columns = df.columns[8:]
-        df["Số giờ"] = df[date_columns].max(axis=1)
+        # Tách số trước dấu |, chuyển về float
+        df_numeric = df[date_columns].apply(
+            lambda col: col.astype(str).str.split("|").str[0].str.strip()
+        ).apply(pd.to_numeric, errors="coerce")
+        df["Số giờ"] = df_numeric.max(axis=1, skipna=True).fillna(0)
+
+        # Tách chữ sau dấu |, giữ nguyên dạng string
+        df_location = df[date_columns].apply(lambda col: col.astype(str).str.split("|").str[-1].str.strip())
+        # Lấy giá trị chữ đầu tiên không rỗng trong từng hàng
+        df["Nơi làm việc"] = df_location.apply(lambda row: next((x for x in row if x and x != "nan"), None), axis=1)
+
         df_workmanagement = pd.DataFrame({
             "owner": user_id,
             "full_name": df["Tên nhân sự - filter"],
@@ -25,9 +36,11 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
             "description": df["Mô tả công việc"],
             "start_date": df["Thời gian bắt đầu"],
             "end_date": df["Thời gian kết thúc"],
-            "QTY": df["Số giờ"]
+            "QTY": df["Số giờ"],
+            "site": df["Nơi làm việc"],
+            "status": 0
         })
-        print(df_workmanagement)
+        print("df_workmanagement:", df_workmanagement)
 
         with conn.cursor() as cursor:
             cursor.execute('SELECT MAX("task_id") FROM "WorkManagement"')
@@ -39,21 +52,24 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
             with conn.cursor() as cursor:
                 # Kiểm tra xem bản ghi đã tồn tại chưa
                 cursor.execute("""
-                    SELECT task_id FROM "WorkManagement"
-                    WHERE owner = %s AND full_name = %s AND project_code = %s AND start_date = %s AND end_date = %s
-                """, (row['owner'], row['full_name'], row['project_code'], row['start_date'], row['end_date']))
+                    SELECT "task_id" FROM "WorkManagement"
+                    WHERE "owner" = %s AND "full_name" = %s AND "project_code" = %s AND "start_date" = %s AND "end_date" = %s AND "QTY" = %s AND "site" = %s AND "status" = %s 
+                """, (row['owner'], row['full_name'], row['project_code'], row['start_date'], row['end_date'], row['QTY'], row['site'], row['status']))
                 existing = cursor.fetchone()
+                print(existing)
 
                 if existing:
                     # Nếu tồn tại → cập nhật
                     cursor.execute("""
                         UPDATE "WorkManagement"
-                        SET full_name = %s,
-                            project_code = %s,
-                            description = %s,
-                            start_date = %s,
-                            end_date = %s,
-                            QTY = %s
+                        SET "full_name" = %s,
+                            "project_code" = %s,
+                            "description" = %s,
+                            "start_date" = %s,
+                            "end_date" = %s,
+                            "QTY" = %s,
+                            "site" = %s,
+                            "status" = %s
                         WHERE task_id = %s
                     """, (
                         row['full_name'],
@@ -62,28 +78,29 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
                         row['start_date'],
                         row['end_date'],
                         row['QTY'],
+                        row['site'], 
+                        row['status'],
                         existing[0]
                     ))
                 else:
-                    # Nếu chưa tồn tại → thêm mới
-                    cursor.execute('SELECT MAX("task_id") FROM "WorkManagement"')
-                    max_id = cursor.fetchone()[0] or 0
-                    task_id = max_id + 1
-
                     cursor.execute("""
                         INSERT INTO "WorkManagement" 
-                        ("task_id", "owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ("owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING "task_id"
                     """, (
-                        task_id,
                         row['owner'],
                         row['full_name'],
                         row['project_code'],
                         row['description'],
                         row['start_date'],
                         row['end_date'],
-                        row['QTY']
+                        row['QTY'],
+                        row['site'], 
+                        row['status']
                     ))
+                    new_id = cursor.fetchone()[0]
+                    print("Inserted new task_id:", new_id)
                 conn.commit()
 
         return df_workmanagement.head(50)
@@ -96,7 +113,7 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
 def WorkManagement_View_function(input: BaseModel, conn):
     try:
         query = """
-            SELECT "task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY"
+            SELECT "task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status"
             FROM "WorkManagement"
             WHERE "owner" = %s
         """
@@ -124,7 +141,7 @@ def WorkManagement_View_function(input: BaseModel, conn):
             cursor.execute(query, params)
             result = cursor.fetchall()
             if result:
-                df = pd.DataFrame(result, columns=["task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY"])
+                df = pd.DataFrame(result, columns=["task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status"])
             else:
                 return {
                     "status": "error",
@@ -138,3 +155,151 @@ def WorkManagement_View_function(input: BaseModel, conn):
             "status": "error",
             "message": str(e)
         }
+
+def WorkManagement_DML_Delete_function(input: BaseModel, conn):
+    try:
+        if input.form.id:
+            with conn.cursor() as cursor:
+                query = """DELETE FROM "WorkManagement" WHERE "task_id"=%s"""
+                cursor.execute(query, (input.form.id,))
+                conn.commit()
+
+            return {
+                "status": "success",
+                "message": f"Xóa WorkManagement task {input.form.id} thành công"
+            }
+        if input.form.full_name:
+            with conn.cursor() as cursor:
+                query = """DELETE FROM "WorkManagement" WHERE "full_name"=%s"""
+                cursor.execute(query, (input.form.full_name,))
+                conn.commit()
+
+            return {
+                "status": "success",
+                "message": f"Xóa WorkManagement {input.form.full_name} thành công"
+            }
+        if input.form.project_code:
+            with conn.cursor() as cursor:
+                query = """DELETE FROM "WorkManagement" WHERE "project_code"=%s"""
+                cursor.execute(query, (input.form.project_code,))
+                conn.commit()
+
+            return {
+                "status": "success",
+                "message": f"Xóa WorkManagement {input.form.project_code} thành công"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Không có trường task_id"
+            }
+    except Exception as e:
+        conn.rollback()
+        return {"status": "error", "message": str(e)}
+
+def WorkManagement_DML_Insert_function(input: BaseModel, conn):
+    try:
+        with conn.cursor() as cursor:
+            # Check tồn tại
+            query = """
+                SELECT 1
+                FROM "WorkManagement"
+                WHERE "owner" = %s AND "full_name" = %s AND "project_code" = %s 
+                      AND "description" = %s AND "start_date" = %s AND "end_date" = %s 
+                      AND "QTY" = %s AND "site" = %s AND "status" = %s
+                LIMIT 1
+            """
+            cursor.execute(query, (
+                input.form.owner,
+                input.form.full_name,
+                input.form.project_code,
+                input.form.description,
+                input.form.start_date,
+                input.form.end_date,
+                input.form.QTY,
+                input.form.site,
+                input.form.status
+            ))
+            if cursor.fetchone():
+                return {
+                    "status": "error",
+                    "message": "Task này đã tồn tại",
+                }
+
+            # Insert và lấy task_id tự động
+            query = """
+                INSERT INTO "WorkManagement" 
+                ("owner", "full_name", "project_code", "description", 
+                 "start_date", "end_date", "QTY", "site", "status")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING "task_id"
+            """
+            cursor.execute(query, (
+                input.form.owner,
+                input.form.full_name,
+                input.form.project_code,
+                input.form.description,
+                input.form.start_date,
+                input.form.end_date,
+                input.form.QTY,
+                input.form.site,
+                input.form.status
+            ))
+            new_id = cursor.fetchone()[0]
+            conn.commit()
+
+            return {
+                "status": "success",
+                "message": "Thêm mới WorkManagement thành công",
+                "id": new_id
+            }
+
+    except Exception as e:
+        conn.rollback()
+        return {"status": "error", "message": str(e)}
+
+    
+def WorkManagement_DML_Update_function(input: BaseModel, conn):
+    try:
+        if input.form.id:
+            with conn.cursor() as cursor:
+                query = """
+                    UPDATE "WorkManagement"
+                    SET "owner" = %s,
+                        "full_name" = %s,
+                        "project_code" = %s,
+                        "description" = %s,
+                        "start_date" = %s,
+                        "end_date" = %s,
+                        "QTY" = %s,
+                        "site" = %s,
+                        "status" = %s
+                    WHERE "task_id" = %s
+                """
+                cursor.execute(query, (
+                    input.form.owner,
+                    input.form.full_name,
+                    input.form.project_code,
+                    input.form.description,
+                    input.form.start_date,
+                    input.form.end_date,
+                    input.form.QTY,
+                    input.form.site,
+                    input.form.status,
+                    input.form.id
+                ))
+                conn.commit()
+
+            return {
+                "status": "success",
+                "message": f"Cập nhật WorkManagement task {input.form.id} thành công"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Không có trường task_id"
+            }
+
+    except Exception as e:
+        conn.rollback()
+        return {"status": "error", "message": str(e)}
