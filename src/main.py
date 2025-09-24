@@ -5,14 +5,17 @@ import pandas as pd
 from io import BytesIO
 from dotenv import load_dotenv
 import os
+from psycopg2.extras import RealDictCursor
 from typing import List, Optional
 from datetime import datetime
 from src.POD_TimeTracker import *
 from src.Authentication import *
 from src.DB_Connection import *
 from src.WorkManagement import *
+from src.WarehouseManagement import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 
 # Tải biến môi trường từ file .env
 load_dotenv()
@@ -292,6 +295,97 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
                 return WorkManagement_DML_Insert_function(input, conn)
             elif input.dml_action == "update":
                 return WorkManagement_DML_Update_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+class WarehouseManagement_View(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+
+@app.post("/WS/WarehouseManagement_View", tags=["Warehouse"])
+async def WarehouseManagement_View_api(input: WarehouseManagement_View):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WarehouseManagement_View_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+class WarehouseManagement_View_Detail(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    id: int = Field(default=1, example=1)
+
+@app.post("/WS/WarehouseManagement_View_Detail", tags=["Warehouse"])
+async def WarehouseManagement_View_Detail_api(input: WarehouseManagement_View_Detail):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WarehouseManagement_View_Detail_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+class FormWarehouseManagement(BaseModel):
+    id: int = Field(default=1, example=1)
+    product_id: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
+    barcode: str = Field(default="Barcode", example="Barcode")
+    product_name: str = Field(default="Product Name", example="Product Name")
+    timestamp: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    location: str = Field(default="Location", example="Location")
+    description: str = Field(default="Description", example="Description")
+    brand: str = Field(default="Brand", example="Brand")
+    seri: str = Field(default="Seri", example="Seri")
+    origin: str = Field(default="Origin", example="Origin")
+    entered_by: str = Field(default="hoanvlh", example="hoanvlh")
+    type: str = Field(default="Import", example="Import") # Import, Export
+    quantity: int = Field(default=1, example=1)
+    unit: str = Field(default="Cái", example="Cái")
+    status: int = Field(default=1, example=1) # 1: Available, 0: Not available 
+
+class WarehouseManagement_DML(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
+    form: FormWarehouseManagement
+
+@app.post("/WS/WarehouseManagement_DML", tags=["Warehouse"])
+async def WarehouseManagement_DML_api(input: WarehouseManagement_DML):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            if input.dml_action == "insert":
+                return WarehouseManagement_DML_Insert_function(input, conn)
+            elif input.dml_action == "update":
+                return WarehouseManagement_DML_Update_function(input, conn)
+            elif input.dml_action == "delete":
+                return WarehouseManagement_DML_Delete_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
