@@ -43,14 +43,13 @@ CREATE TABLE IF NOT EXISTS "WorkManagement" (
 
 CREATE TABLE IF NOT EXISTS "WS_WarehouseManagement" (
     "ID" SERIAL PRIMARY KEY,   
-    "product_id" VARCHAR(255),
-    "barcode" VARCHAR(255) UNIQUE,
+    "device_code" VARCHAR(255),
+    "series_number" VARCHAR(255) UNIQUE,
     "product_name" VARCHAR(255),
-    "datetime" TIMESTAMP,
+    "date_time" TIMESTAMP,
     "location" VARCHAR(255),
     "description" VARCHAR(255),
     "brand" VARCHAR(255),
-    "seri" VARCHAR(255),
     "origin" VARCHAR(255),
     "entered_by" VARCHAR(255),
     "type" VARCHAR(255),
@@ -58,7 +57,7 @@ CREATE TABLE IF NOT EXISTS "WS_WarehouseManagement" (
     "unit" VARCHAR(50),
     "status" INTEGER DEFAULT 0
 );
-COPY "WS_WarehouseManagement" ("ID", "product_id", "barcode", "product_name", "datetime", "location", "description", "brand", "seri", "origin", "entered_by", "type", "quantity", "unit", "status")
+COPY "WS_WarehouseManagement" ("ID", "device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "type", "quantity", "unit", "status")
 FROM '/postgresql/data/WS_WarehouseManagement.csv'
 DELIMITER ','
 CSV HEADER;

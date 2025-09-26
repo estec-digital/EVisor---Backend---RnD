@@ -10,20 +10,19 @@ def WarehouseManagement_View_function(input, conn):
         for row in rows:
             item = {
                 "ID": row[0],
-                "product_id": row[1],
-                "barcode": row[2],
+                "device_code": row[1],
+                "series_number": row[2],
                 "product_name": row[3],
-                "datetime": row[4],
+                "date_time": row[4],
                 "location": row[5],
                 "description": row[6],
                 "branch": row[7],
-                "seri": row[8],
-                "origin": row[9],
-                "entered_by": row[10],
-                "type": row[11],
-                "quantity": row[12],
-                "unit": row[13],
-                "status": row[14]
+                "origin": row[8],
+                "entered_by": row[9],
+                "type": row[10],
+                "quantity": row[11],
+                "unit": row[12],
+                "status": row[13]
             }
             items.append(item)
         return {
@@ -49,20 +48,19 @@ def WarehouseManagement_View_Detail_function(input, conn):
         if row:
             item = {
                 "ID": row[0],
-                "product_id": row[1],
-                "barcode": row[2],
+                "device_code": row[1],
+                "series_number": row[2],
                 "product_name": row[3],
-                "datetime": row[4],
+                "date_time": row[4],
                 "location": row[5],
                 "description": row[6],
                 "branch": row[7],
-                "seri": row[8],
-                "origin": row[9],
-                "entered_by": row[10],
-                "type": row[11],
-                "quantity": row[12],
-                "unit": row[13],
-                "status": row[14]
+                "origin": row[8],
+                "entered_by": row[9],
+                "type": row[10],
+                "quantity": row[11],
+                "unit": row[12],
+                "status": row[13]
             }
             return {
                 "status": "success",
@@ -86,19 +84,18 @@ def WarehouseManagement_DML_Insert_function(input, conn):
         cursor = conn.cursor()
         query = """ 
             INSERT INTO "WS_WarehouseManagement" 
-            ("product_id", "barcode", "product_name", "datetime", "location", "description", "brand", "seri", "origin", "entered_by", "type", "quantity", "unit", "status") 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
+            ("device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "type", "quantity", "unit", "status") 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
             RETURNING "ID"
         """
         cursor.execute(query, (
-            input.form.product_id,
-            input.form.barcode,
+            input.form.device_code,
+            input.form.series_number,
             input.form.product_name,
-            input.form.timestamp,
+            input.form.date_time,
             input.form.location,
             input.form.description,
             input.form.brand,
-            input.form.seri,
             input.form.origin,
             input.form.entered_by,
             input.form.type,
@@ -127,18 +124,17 @@ def WarehouseManagement_DML_Update_function(input, conn):
         cursor = conn.cursor()
         query = """ 
             UPDATE "WS_WarehouseManagement" 
-            SET "product_id" = %s, "barcode" = %s, "product_name" = %s, "datetime" = %s, "location" = %s, "description" = %s, "brand" = %s, "seri" = %s, "origin" = %s, "entered_by" = %s, "type" = %s, "quantity" = %s, "unit" = %s, "status" = %s 
+            SET "device_code" = %s, "series_number" = %s, "product_name" = %s, "date_time" = %s, "location" = %s, "description" = %s, "brand" = %s, "origin" = %s, "entered_by" = %s, "type" = %s, "quantity" = %s, "unit" = %s, "status" = %s 
             WHERE "ID" = %s
         """
         cursor.execute(query, (
-            input.form.product_id,
-            input.form.barcode,
+            input.form.device_code,
+            input.form.series_number,
             input.form.product_name,
-            input.form.timestamp,
+            input.form.date_time,
             input.form.location,
             input.form.description,
             input.form.brand,
-            input.form.seri,
             input.form.origin,
             input.form.entered_by,
             input.form.type,

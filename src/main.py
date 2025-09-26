@@ -348,14 +348,13 @@ async def WarehouseManagement_View_Detail_api(input: WarehouseManagement_View_De
 
 class FormWarehouseManagement(BaseModel):
     id: int = Field(default=1, example=1)
-    product_id: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
-    barcode: str = Field(default="Barcode", example="Barcode")
+    device_code: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
+    series_number: str = Field(default="series_number", example="series_number")
     product_name: str = Field(default="Product Name", example="Product Name")
-    timestamp: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    date_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
     location: str = Field(default="Location", example="Location")
     description: str = Field(default="Description", example="Description")
     brand: str = Field(default="Brand", example="Brand")
-    seri: str = Field(default="Seri", example="Seri")
     origin: str = Field(default="Origin", example="Origin")
     entered_by: str = Field(default="hoanvlh", example="hoanvlh")
     type: str = Field(default="Import", example="Import") # Import, Export
