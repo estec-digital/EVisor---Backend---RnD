@@ -52,12 +52,12 @@ CREATE TABLE IF NOT EXISTS "WS_WarehouseManagement" (
     "brand" VARCHAR(255),
     "origin" VARCHAR(255),
     "entered_by" VARCHAR(255),
-    "type" VARCHAR(255),
+    "product_type" VARCHAR(255),
     "quantity" INTEGER,
     "unit" VARCHAR(50),
     "status" INTEGER DEFAULT 0
 );
-COPY "WS_WarehouseManagement" ("ID", "device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "type", "quantity", "unit", "status")
+COPY "WS_WarehouseManagement" ("ID", "device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "product_type", "quantity", "unit", "status")
 FROM '/postgresql/data/WS_WarehouseManagement.csv'
 DELIMITER ','
 CSV HEADER;

@@ -357,7 +357,7 @@ class FormWarehouseManagement(BaseModel):
     brand: str = Field(default="Brand", example="Brand")
     origin: str = Field(default="Origin", example="Origin")
     entered_by: str = Field(default="hoanvlh", example="hoanvlh")
-    type: str = Field(default="Import", example="Import") # Import, Export
+    product_type: str = Field(default="Import", example="Import") # Import, Export
     quantity: int = Field(default=1, example=1)
     unit: str = Field(default="Cái", example="Cái")
     status: int = Field(default=1, example=1) # 1: Available, 0: Not available 
@@ -385,6 +385,29 @@ async def WarehouseManagement_DML_api(input: WarehouseManagement_DML):
                 return WarehouseManagement_DML_Update_function(input, conn)
             elif input.dml_action == "delete":
                 return WarehouseManagement_DML_Delete_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    
+class WarehouseManagement_DML(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    date: str = Field(default="2025-09-30", example="2025-09-30")
+
+@app.post("/WarehouseManagement_by_date", tags=["Warehouse"])
+async def WarehouseManagement_by_date_api(input: WarehouseManagement_DML):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WarehouseManagement_By_Date_function(input, conn)
     except Exception as e:
         return {
             "status": "error",

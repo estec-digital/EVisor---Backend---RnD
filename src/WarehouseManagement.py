@@ -16,10 +16,10 @@ def WarehouseManagement_View_function(input, conn):
                 "date_time": row[4],
                 "location": row[5],
                 "description": row[6],
-                "branch": row[7],
+                "brand": row[7],
                 "origin": row[8],
                 "entered_by": row[9],
-                "type": row[10],
+                "product_type": row[10],
                 "quantity": row[11],
                 "unit": row[12],
                 "status": row[13]
@@ -54,10 +54,10 @@ def WarehouseManagement_View_Detail_function(input, conn):
                 "date_time": row[4],
                 "location": row[5],
                 "description": row[6],
-                "branch": row[7],
+                "brand": row[7],
                 "origin": row[8],
                 "entered_by": row[9],
-                "type": row[10],
+                "product_type": row[10],
                 "quantity": row[11],
                 "unit": row[12],
                 "status": row[13]
@@ -84,7 +84,7 @@ def WarehouseManagement_DML_Insert_function(input, conn):
         cursor = conn.cursor()
         query = """ 
             INSERT INTO "WS_WarehouseManagement" 
-            ("device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "type", "quantity", "unit", "status") 
+            ("device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "product_type", "quantity", "unit", "status") 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
             RETURNING "ID"
         """
@@ -98,7 +98,7 @@ def WarehouseManagement_DML_Insert_function(input, conn):
             input.form.brand,
             input.form.origin,
             input.form.entered_by,
-            input.form.type,
+            input.form.product_type,
             input.form.quantity,
             input.form.unit,
             input.form.status
@@ -124,7 +124,7 @@ def WarehouseManagement_DML_Update_function(input, conn):
         cursor = conn.cursor()
         query = """ 
             UPDATE "WS_WarehouseManagement" 
-            SET "device_code" = %s, "series_number" = %s, "product_name" = %s, "date_time" = %s, "location" = %s, "description" = %s, "brand" = %s, "origin" = %s, "entered_by" = %s, "type" = %s, "quantity" = %s, "unit" = %s, "status" = %s 
+            SET "device_code" = %s, "series_number" = %s, "product_name" = %s, "date_time" = %s, "location" = %s, "description" = %s, "brand" = %s, "origin" = %s, "entered_by" = %s, "product_type" = %s, "quantity" = %s, "unit" = %s, "status" = %s 
             WHERE "ID" = %s
         """
         cursor.execute(query, (
@@ -137,7 +137,7 @@ def WarehouseManagement_DML_Update_function(input, conn):
             input.form.brand,
             input.form.origin,
             input.form.entered_by,
-            input.form.type,
+            input.form.product_type,
             input.form.quantity,
             input.form.unit,
             input.form.status,
@@ -181,6 +181,57 @@ def WarehouseManagement_DML_Delete_function(input, conn):
         }
     except Exception as e:
         conn.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseManagement_By_Date_function(input, conn):
+    try:
+        cursor = conn.cursor()
+        query = """ 
+            SELECT * 
+            FROM "WS_WarehouseManagement"
+            WHERE DATE(date_time) = %s; 
+        """
+        cursor.execute(query, (input.date,))
+        rows = cursor.fetchall()  
+
+        items = []
+        for row in rows:
+            item = {
+                "ID": row[0],
+                "device_code": row[1],
+                "series_number": row[2],
+                "product_name": row[3],
+                "date_time": row[4],
+                "location": row[5],
+                "description": row[6],
+                "brand": row[7],
+                "origin": row[8],
+                "entered_by": row[9],
+                "product_type": row[10],
+                "quantity": row[11],
+                "unit": row[12],
+                "status": row[13]
+            }
+            items.append(item)
+
+        if items:
+            return {
+                "status": "success",
+                "count": len(items),
+                "data": items
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"No items found for date {input.date}"
+            }
+
+    except Exception as e:
         return {
             "status": "error",
             "message": str(e)
