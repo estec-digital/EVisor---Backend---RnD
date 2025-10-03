@@ -41,23 +41,41 @@ CREATE TABLE IF NOT EXISTS "WorkManagement" (
     "status" INTEGER DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS "WS_WarehouseManagement" (
-    "ID" SERIAL PRIMARY KEY,   
-    "device_code" VARCHAR(255),
-    "series_number" VARCHAR(255) UNIQUE,
+CREATE TABLE IF NOT EXISTS "WS_Statistical" (
+    "id" SERIAL PRIMARY KEY,  
     "product_name" VARCHAR(255),
-    "date_time" TIMESTAMP,
-    "location" VARCHAR(255),
     "description" VARCHAR(255),
-    "brand" VARCHAR(255),
+    "time" timestamp,
+    "part_no" VARCHAR(255),
     "origin" VARCHAR(255),
-    "entered_by" VARCHAR(255),
-    "product_type" VARCHAR(255),
-    "quantity" INTEGER,
     "unit" VARCHAR(50),
+    "quantity" INTEGER,
+    "seri_number" VARCHAR(255),
     "status" INTEGER DEFAULT 0
 );
-COPY "WS_WarehouseManagement" ("ID", "device_code", "series_number", "product_name", "date_time", "location", "description", "brand", "origin", "entered_by", "product_type", "quantity", "unit", "status")
-FROM '/postgresql/data/WS_WarehouseManagement.csv'
-DELIMITER ','
-CSV HEADER;
+
+CREATE TABLE IF NOT EXISTS "WS_Import" (
+    "id" SERIAL PRIMARY KEY,    
+    "import_id" VARCHAR(255),
+    "time" TIMESTAMP,
+    "import_time" timestamp, 
+    "project_code" VARCHAR(255),            
+    "product_name" VARCHAR(255),                      
+    "part_no" VARCHAR(255),               
+    "origin" VARCHAR(255),                  
+    "quantity" INTEGER,                     
+    "seri_number" VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS "WS_Export" (
+    "id" SERIAL PRIMARY KEY,
+    "export_id" VARCHAR(255),
+    "time" TIMESTAMP,      
+    "export_time" timestamp,
+    "project_code" VARCHAR(255),            
+    "product_name" VARCHAR(255),                      
+    "part_no" VARCHAR(255),               
+    "origin" VARCHAR(255),                  
+    "quantity" INTEGER,                     
+    "seri_number" VARCHAR(255)
+);
