@@ -301,12 +301,12 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
             "message": str(e)
         }
 
-class Statistical_View(BaseModel):
+class WarehouseStatistical_View(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
 
-@app.post("/WS/Statistical_View", tags=["Warehouse"])
-async def Statistical_View_api(input: Statistical_View):
+@app.post("/WS/WarehouseStatistical_View", tags=["Warehouse"])
+async def WarehouseStatistical_View_api(input: WarehouseStatistical_View):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -316,20 +316,20 @@ async def Statistical_View_api(input: Statistical_View):
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
                 }
         else:
-            return Statistical_View_function(input, conn)
+            return WarehouseStatistical_View_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 
-class Statistical_View_Detail(BaseModel):
+class WarehouseStatistical_View_Detail(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     id: int = Field(default=1, example=1)
 
-@app.post("/WS/Statistical_View_Detail", tags=["Warehouse"])
-async def Statistical_View_Detail_api(input: Statistical_View_Detail):
+@app.post("/WS/WarehouseStatistical_View_Detail", tags=["Warehouse"])
+async def WarehouseStatistical_View_Detail_api(input: WarehouseStatistical_View_Detail):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -339,14 +339,14 @@ async def Statistical_View_Detail_api(input: Statistical_View_Detail):
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
                 }
         else:
-            return Statistical_View_Detail_function(input, conn)
+            return WarehouseStatistical_View_Detail_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 
-class FormStatistical(BaseModel):
+class FormWarehouseStatistical(BaseModel):
     id: int = Field(default=1, example=1)
     product_name: str = Field(default="Product Name", example="Product Name")
     description: str = Field(default="Description", example="Description")
@@ -356,16 +356,18 @@ class FormStatistical(BaseModel):
     unit: str = Field(default="Cái", example="Cái")  
     quantity: int = Field(default=1, example=1) 
     seri_number: str = Field(default="seri_number", example="seri_number")
+    location: str = Field(default="location", example="location")
+    entered_by: str = Field(default="entered_by", example="entered_by")
     status: int = Field(default=1, example=1) # 1: Available, 0: Not available 
 
-class WareStatistical_DML(BaseModel):
+class WarehouseStatistical_DML(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
-    form: FormStatistical
+    form: FormWarehouseStatistical
 
-@app.post("/WS/Statistical_DML", tags=["Warehouse"])
-async def Statistical_DML_api(input: WareStatistical_DML):
+@app.post("/WS/WarehouseStatistical_DML", tags=["Warehouse"])
+async def WarehouseStatistical_DML_api(input: WarehouseStatistical_DML):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -376,24 +378,24 @@ async def Statistical_DML_api(input: WareStatistical_DML):
                 }
         else:
             if input.dml_action == "insert":
-                return Statistical_DML_Insert_function(input, conn)
+                return WarehouseStatistical_DML_Insert_function(input, conn)
             elif input.dml_action == "update":
-                return Statistical_DML_Update_function(input, conn)
+                return WarehouseStatistical_DML_Update_function(input, conn)
             elif input.dml_action == "delete":
-                return Statistical_DML_Delete_function(input, conn)
+                return WarehouseStatistical_DML_Delete_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
     
-class Statistical_By_Date(BaseModel):
+class WarehouseStatistical_By_Date(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     date: str = Field(default="2025-09-30", example="2025-09-30")
 
-@app.post("/WS/Statistical_By_Date", tags=["Warehouse"])
-async def Statistical_By_Date_api(input: Statistical_By_Date):
+@app.post("/WS/WarehouseStatistical_By_Date", tags=["Warehouse"])
+async def WarehouseStatistical_By_Date_api(input: WarehouseStatistical_By_Date):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -403,15 +405,15 @@ async def Statistical_By_Date_api(input: Statistical_By_Date):
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
                 }
         else:
-            return Statistical_By_Date_function(input, conn)
+            return WarehouseStatistical_By_Date_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 from fastapi import Form
-@app.post("/WS/Statistical_Import_Excel", tags=["Warehouse"])
-async def Statistical_Import_Excel_api(
+@app.post("/WS/WarehouseStatistical_Import_Excel", tags=["Warehouse"])
+async def WarehouseStatistical_Import_Excel_api(
     request_id: str = Form("evisor-1234567890", example="evisor-1234567890"),
     owner: str = Form("hoanvlh", example="hoanvlh"),
     file: UploadFile = File(...)):
@@ -425,7 +427,7 @@ async def Statistical_Import_Excel_api(
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
             }
 
-        return Statistical_Import_Excel_function(conn, file)
+        return WarehouseStatistical_Import_Excel_function(conn, file)
 
     except Exception as e:
         return {

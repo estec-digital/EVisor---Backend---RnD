@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "unit" VARCHAR(50),
     "quantity" INTEGER,
     "seri_number" VARCHAR(255),
+    "location" VARCHAR(255),
+    "entered_by" VARCHAR(255),
     "status" INTEGER DEFAULT 0
 );
 

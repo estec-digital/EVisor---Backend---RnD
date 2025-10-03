@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-def Statistical_View_function(input, conn):
+def WarehouseStatistical_View_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
@@ -23,7 +23,9 @@ def Statistical_View_function(input, conn):
                 "unit": row[6],
                 "quantity": row[7],
                 "seri_number": row[8],
-                "status": row[9]
+                "location": row[9],
+                "entered_by": row[10],
+                "status": row[11]
             }
             items.append(item)
         return {
@@ -38,7 +40,7 @@ def Statistical_View_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_View_Detail_function(input, conn):
+def WarehouseStatistical_View_Detail_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
@@ -57,7 +59,9 @@ def Statistical_View_Detail_function(input, conn):
                 "unit": row[6],
                 "quantity": row[7],
                 "seri_number": row[8],
-                "status": row[9]
+                "location": row[9],
+                "entered_by": row[10],
+                "status": row[11]
             }
             return {
                 "status": "success",
@@ -76,13 +80,13 @@ def Statistical_View_Detail_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_DML_Insert_function(input, conn):
+def WarehouseStatistical_DML_Insert_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
             INSERT INTO "WS_Statistical" 
-            ("product_name", "description", "time", "part_no", "origin", "unit", "quantity", "seri_number", "status") 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) 
+            ("product_name", "description", "time", "part_no", "origin", "unit", "quantity", "seri_number", "location", "entered_by", "status") 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
             RETURNING id
         """
         cursor.execute(query, (
@@ -94,6 +98,8 @@ def Statistical_DML_Insert_function(input, conn):
             input.form.unit,
             input.form.quantity,
             input.form.seri_number,
+            input.form.location,
+            input.form.entered_by,
             input.form.status
         ))
         new_id = cursor.fetchone()[0]
@@ -112,12 +118,12 @@ def Statistical_DML_Insert_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_DML_Update_function(input, conn):
+def WarehouseStatistical_DML_Update_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
             UPDATE "WS_Statistical" 
-            SET "product_name" = %s, "description" = %s, "time" = %s, "part_no" = %s, "origin" = %s, "unit" = %s, "quantity" = %s, "seri_number" = %s, "status" = %s 
+            SET "product_name" = %s, "description" = %s, "time" = %s, "part_no" = %s, "origin" = %s, "unit" = %s, "quantity" = %s, "seri_number" = %s, "location" = %s, "entered_by" = %s, "status" = %s 
             WHERE id = %s
         """
         cursor.execute(query, (
@@ -129,6 +135,8 @@ def Statistical_DML_Update_function(input, conn):
             input.form.unit,
             input.form.quantity,
             input.form.seri_number,
+            input.form.location,
+            input.form.entered_by,
             input.form.status,
             input.form.id
         ))
@@ -151,7 +159,7 @@ def Statistical_DML_Update_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_DML_Delete_function(input, conn):
+def WarehouseStatistical_DML_Delete_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
@@ -177,7 +185,7 @@ def Statistical_DML_Delete_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_By_Date_function(input, conn):
+def WarehouseStatistical_By_Date_function(input, conn):
     try:
         cursor = conn.cursor()
         query = """ 
@@ -200,7 +208,9 @@ def Statistical_By_Date_function(input, conn):
                 "unit": row[6],
                 "quantity": row[7],
                 "seri_number": row[8],
-                "status": row[9]
+                "location": row[9],
+                "entered_by": row[10],
+                "status": row[11]
             }
             items.append(item)
 
@@ -224,7 +234,7 @@ def Statistical_By_Date_function(input, conn):
     finally:
         cursor.close()
 
-def Statistical_Import_Excel_function(conn, file):
+def WarehouseStatistical_Import_Excel_function(conn, file):
     try:
         filename = file.filename
         ext = os.path.splitext(filename)[1].lower()
@@ -269,8 +279,8 @@ def Statistical_Import_Excel_function(conn, file):
         for _, row in df.iterrows():
             cursor.execute("""
                 INSERT INTO "WS_Statistical"
-                (product_name, description, time, part_no, origin, unit, quantity, seri_number, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
                 row.get("product_name"),
                 row.get("description"),
@@ -280,6 +290,8 @@ def Statistical_Import_Excel_function(conn, file):
                 row.get("unit"),
                 row.get("quantity"),
                 row.get("seri_number"),
+                row.get("location"),
+                row.get("entered_by"),
                 row.get("status")
             ))
 
