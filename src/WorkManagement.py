@@ -128,13 +128,20 @@ def WorkManagement_View_function(input: BaseModel, conn):
             query += f" AND \"project_code\" = ANY(%s)"
             params.append(filter.project_code)
 
+        # if filter.start_date and filter.end_date:
+        #     start_date = str(filter.start_date.replace(tzinfo=None))
+        #     end_date = str(filter.end_date.replace(tzinfo=None))
+        #     print(start_date, end_date)
+        #     query += ' AND "end_date" <= %s AND "start_date" >= %s'
+        #     params.extend([end_date, start_date])
+
         if filter.start_date and filter.end_date:
             start_date = str(filter.start_date.replace(tzinfo=None))
             end_date = str(filter.end_date.replace(tzinfo=None))
             print(start_date, end_date)
-            query += ' AND "end_date" <= %s AND "start_date" >= %s'
+            query += ' AND "start_date" <= %s AND "end_date" >= %s'
             params.extend([end_date, start_date])
-        
+
         print("query", query)
         print("params:", params)
         with conn.cursor() as cursor:
@@ -159,10 +166,11 @@ def WorkManagement_View_function(input: BaseModel, conn):
 def WorkManagement_DML_Delete_function(input: BaseModel, conn):
     try:
         if input.form.id:
-            with conn.cursor() as cursor:
-                query = """DELETE FROM "WorkManagement" WHERE "task_id"=%s"""
-                cursor.execute(query, (input.form.id,))
-                conn.commit()
+            for id in input.form.id:
+                with conn.cursor() as cursor:
+                    query = """DELETE FROM "WorkManagement" WHERE "task_id"=%s AND "owner"=%s"""
+                    cursor.execute(query, (id, input.owner))
+                    conn.commit()
 
             return {
                 "status": "success",
@@ -170,8 +178,8 @@ def WorkManagement_DML_Delete_function(input: BaseModel, conn):
             }
         if input.form.full_name:
             with conn.cursor() as cursor:
-                query = """DELETE FROM "WorkManagement" WHERE "full_name"=%s"""
-                cursor.execute(query, (input.form.full_name,))
+                query = """DELETE FROM "WorkManagement" WHERE "full_name"=%s AND "owner"=%s"""
+                cursor.execute(query, (input.form.full_name, input.owner))
                 conn.commit()
 
             return {
@@ -180,8 +188,8 @@ def WorkManagement_DML_Delete_function(input: BaseModel, conn):
             }
         if input.form.project_code:
             with conn.cursor() as cursor:
-                query = """DELETE FROM "WorkManagement" WHERE "project_code"=%s"""
-                cursor.execute(query, (input.form.project_code,))
+                query = """DELETE FROM "WorkManagement" WHERE "project_code"=%s AND "owner"=%s"""
+                cursor.execute(query, (input.form.project_code, input.owner))
                 conn.commit()
 
             return {
@@ -262,33 +270,34 @@ def WorkManagement_DML_Insert_function(input: BaseModel, conn):
 def WorkManagement_DML_Update_function(input: BaseModel, conn):
     try:
         if input.form.id:
-            with conn.cursor() as cursor:
-                query = """
-                    UPDATE "WorkManagement"
-                    SET "owner" = %s,
-                        "full_name" = %s,
-                        "project_code" = %s,
-                        "description" = %s,
-                        "start_date" = %s,
-                        "end_date" = %s,
-                        "QTY" = %s,
-                        "site" = %s,
-                        "status" = %s
-                    WHERE "task_id" = %s
-                """
-                cursor.execute(query, (
-                    input.form.owner,
-                    input.form.full_name,
-                    input.form.project_code,
-                    input.form.description,
-                    input.form.start_date,
-                    input.form.end_date,
-                    input.form.QTY,
-                    input.form.site,
-                    input.form.status,
-                    input.form.id
-                ))
-                conn.commit()
+            for id in input.form.id:
+                with conn.cursor() as cursor:
+                    query = """
+                        UPDATE "WorkManagement"
+                        SET "owner" = %s,
+                            "full_name" = %s,
+                            "project_code" = %s,
+                            "description" = %s,
+                            "start_date" = %s,
+                            "end_date" = %s,
+                            "QTY" = %s,
+                            "site" = %s,
+                            "status" = %s
+                        WHERE "task_id" = %s
+                    """
+                    cursor.execute(query, (
+                        input.form.owner,
+                        input.form.full_name,
+                        input.form.project_code,
+                        input.form.description,
+                        input.form.start_date,
+                        input.form.end_date,
+                        input.form.QTY,
+                        input.form.site,
+                        input.form.status,
+                        id
+                    ))
+                    conn.commit()
 
             return {
                 "status": "success",

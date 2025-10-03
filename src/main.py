@@ -261,7 +261,7 @@ async def WorkManagement_View_api(input: WorkManagement_View):
         }
 
 class Form(BaseModel):
-    id: Optional[int] = None
+    id: Optional[List[int]] = None
     owner: Optional[str] = ""
     full_name: Optional[str] = ""
     project_code: Optional[str] = ""
@@ -280,6 +280,7 @@ class WorkManagement_DML(BaseModel):
 
 @app.post("/WorkManagement_DML", tags=["General"])
 async def WorkManagement_DML_api(input: WorkManagement_DML):
+    print("input:", input)
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -348,20 +349,19 @@ async def WarehouseManagement_View_Detail_api(input: WarehouseManagement_View_De
 
 class FormWarehouseManagement(BaseModel):
     id: int = Field(default=1, example=1)
-    product_id: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
-    barcode: str = Field(default="Barcode", example="Barcode")
+    device_code: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
+    series_number: str = Field(default="series_number", example="series_number")
     product_name: str = Field(default="Product Name", example="Product Name")
-    timestamp: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    date_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
     location: str = Field(default="Location", example="Location")
     description: str = Field(default="Description", example="Description")
     brand: str = Field(default="Brand", example="Brand")
-    seri: str = Field(default="Seri", example="Seri")
     origin: str = Field(default="Origin", example="Origin")
     entered_by: str = Field(default="hoanvlh", example="hoanvlh")
-    type: str = Field(default="Import", example="Import") # Import, Export
+    product_type: str = Field(default="Import", example="Import") # Import, Export
     quantity: int = Field(default=1, example=1)
     unit: str = Field(default="Cái", example="Cái")
-    status: int = Field(default=1, example=1) # 1: Available, 0: Not available 
+    status: int = Field(default=1, example=1) # 1: Available, 0: Not available  
 
 class WarehouseManagement_DML(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
@@ -386,6 +386,29 @@ async def WarehouseManagement_DML_api(input: WarehouseManagement_DML):
                 return WarehouseManagement_DML_Update_function(input, conn)
             elif input.dml_action == "delete":
                 return WarehouseManagement_DML_Delete_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    
+class WarehouseManagement_By_Date(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    date: str = Field(default="2025-09-30", example="2025-09-30")
+
+@app.post("/WS/WarehouseManagement_By_Date", tags=["Warehouse"])
+async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WarehouseManagement_By_Date_function(input, conn)
     except Exception as e:
         return {
             "status": "error",

@@ -213,12 +213,16 @@ def POD_TimeTracker_Merge_Manual_function(minio_client: Minio, input: BaseModel,
             if isinstance(json, dict) and json.get("status") == "error":
                 return json
             results.append(json)
-            df = generate_dataframe(json)
+
+            stt_max = df_final["STT"].max() if not df_final.empty else 0
+            df = generate_dataframe(json, stt_max)
             print("df_final:", df_final.head())
             print(f"DataFrame: {df}")
             df_final = pd.concat([df_final, df], ignore_index=True)
 
-        df_final = df_final.sort_values(by=["STT", "Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        df_final = df_final.sort_values(by=["Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        print(f"DataFrame : {df}")
+
         df_final = df_final.drop_duplicates(subset=["Tên nhân sự", "Mã dự án", "Mô tả công việc", "Thời gian bắt đầu", "Thời gian kết thúc"]).reset_index(drop=True)
         print("df_final:", df_final.head())
         output_path_local, overwork = save_file_local(df_final)
@@ -342,10 +346,12 @@ def POD_TimeTracker_Merge_function(minio_client: Minio, input: BaseModel, jvm_pa
                 return json_data
             
             results.append(json_data)
-            df = generate_dataframe(json_data)
+            stt_max = df_final["STT"].max() if not df_final.empty else 0
+            df = generate_dataframe(json_data, stt_max)
             df_final = pd.concat([df_final, df], ignore_index=True) 
         
-        df_final = df_final.sort_values(by=["STT", "Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        # df_final = df_final.sort_values(by=["STT", "Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        df_final = df_final.sort_values(by=["Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
         df_final = df_final.drop_duplicates(subset=["Tên nhân sự", "Mã dự án", "Mô tả công việc", "Thời gian bắt đầu", "Thời gian kết thúc"]).reset_index(drop=True)
         print("df_final:", df_final.head())
         output_path_local, overwork = save_file_local(df_final)
@@ -521,17 +527,54 @@ def save_file_minio(minio_client: Minio, file_path: str) -> str:
     except Exception as e:
         raise Exception(f"Error saving file to MinIO: {str(e)}")
 
-def merge_cells_by_columns(worksheet, df, col_indices):
+# def merge_cells_by_columns(worksheet, df, col_indices):
+#     for col in col_indices:
+#         start_row = 2
+#         for row in range(3, len(df) + 2):
+#             if df.iloc[row - 2, col] != df.iloc[row - 3, col]:
+#                 if row - 1 > start_row:
+#                     worksheet.merge_cells(start_row=start_row, start_column=col + 1, end_row=row - 1, end_column=col + 1)
+#                 start_row = row
+#         # Merge cho phần cuối cùng
+#         if len(df) + 1 > start_row:
+#             worksheet.merge_cells(start_row=start_row, start_column=col + 1, end_row=len(df) + 1, end_column=col + 1)
+
+def merge_cells_by_columns(worksheet, df, col_indices, name_col=1, codeproject_col=2):
+    """
+    worksheet: sheet excel openpyxl
+    df: DataFrame
+    col_indices: list các cột muốn merge (0-based index)
+    name_col: cột "Tên nhân sự" (mặc định = 1)
+    """
     for col in col_indices:
         start_row = 2
         for row in range(3, len(df) + 2):
-            if df.iloc[row - 2, col] != df.iloc[row - 3, col]:
-                if row - 1 > start_row:
-                    worksheet.merge_cells(start_row=start_row, start_column=col + 1, end_row=row - 1, end_column=col + 1)
-                start_row = row
-        # Merge cho phần cuối cùng
+            if col == codeproject_col:
+                if df.iloc[row - 2, col] != df.iloc[row - 3, col]:
+                    if row - 1 > start_row:
+                        worksheet.merge_cells(start_row=start_row, start_column=col + 1, end_row=row - 1, end_column=col + 1)
+                    start_row = row
+            else:
+                cur_val = df.iloc[row - 2, col]
+                prev_val = df.iloc[row - 3, col]
+                cur_name = df.iloc[row - 2, name_col]
+                prev_name = df.iloc[row - 3, name_col]
+
+                # nếu giá trị cột khác và tên cũng khác => ngắt nhóm
+                if cur_val != prev_val and cur_name != prev_name:
+                    if row - 1 > start_row:
+                        worksheet.merge_cells(
+                            start_row=start_row, start_column=col + 1,
+                            end_row=row - 1, end_column=col + 1
+                        )
+                    start_row = row
+
+        # merge đoạn cuối
         if len(df) + 1 > start_row:
-            worksheet.merge_cells(start_row=start_row, start_column=col + 1, end_row=len(df) + 1, end_column=col + 1)
+            worksheet.merge_cells(
+                start_row=start_row, start_column=col + 1,
+                end_row=len(df) + 1, end_column=col + 1
+            )
 
 def check_overwork(df: pd.DataFrame) -> Optional[dict]:
     """
@@ -688,11 +731,11 @@ def save_file_local(df: pd.DataFrame):
     print("✅ Xuất file thành công với ô đã được merge theo nhóm.")
     return filename, overwork
 
-def generate_dataframe(json_data: List[dict]) -> str:
+def generate_dataframe(json_data: List[dict], stt_max) -> str:
     # print("Generating output path...")
     tasks = json_data
     rows = []
-    stt_global = 0
+    stt_global = stt_max
     # print("Processing tasks...")
 
     # Get range date
