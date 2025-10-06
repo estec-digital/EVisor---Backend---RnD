@@ -282,9 +282,9 @@ def WarehouseImportExport_View_function(conn, table_name: str):
         for row in rows:
             item = {
                 "id": row[0],
-                "import_export_id": row[1],
+                f"{'import' if table_name == 'WS_Import' else 'export'}_id": row[1],
                 "time": row[2],
-                "import_export_time": row[3],
+                f"{'import' if table_name == 'WS_Import' else 'export'}_time": row[3],
                 "project_code": row[4],
                 "product_name": row[5],
                 "part_no": row[6],
