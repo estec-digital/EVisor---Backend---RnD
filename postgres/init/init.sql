@@ -48,11 +48,13 @@ CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "time" timestamp,
     "part_no" VARCHAR(255),
     "origin" VARCHAR(255),
+    "entered_by" VARCHAR(255),
+    "product_type" VARCHAR(255),
+    "quantity" INTEGER,
     "unit" VARCHAR(50),
     "quantity" INTEGER,
     "seri_number" VARCHAR(255),
     "location" VARCHAR(255),
-    "entered_by" VARCHAR(255),
     "status" INTEGER DEFAULT 0
 );
 

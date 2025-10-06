@@ -261,7 +261,7 @@ async def WorkManagement_View_api(input: WorkManagement_View):
         }
 
 class Form(BaseModel):
-    id: Optional[int] = None
+    id: Optional[List[int]] = None
     owner: Optional[str] = ""
     full_name: Optional[str] = ""
     project_code: Optional[str] = ""
@@ -280,6 +280,7 @@ class WorkManagement_DML(BaseModel):
 
 @app.post("/WorkManagement_DML", tags=["General"])
 async def WorkManagement_DML_api(input: WorkManagement_DML):
+    print("input:", input)
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -441,6 +442,29 @@ async def WarehouseImportExport_View_api(input: WarehouseImportExport_View):
                 "message": f"Tùy chọn '{input.option}' không hợp lệ. Chỉ chấp nhận 'import' hoặc 'export'."
             }
         return WarehouseImportExport_View_function(conn, table_name)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    
+class WarehouseManagement_By_Date(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    date: str = Field(default="2025-09-30", example="2025-09-30")
+
+@app.post("/WS/WarehouseManagement_By_Date", tags=["Warehouse"])
+async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WarehouseManagement_By_Date_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
