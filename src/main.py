@@ -6,7 +6,7 @@ from io import BytesIO
 from dotenv import load_dotenv
 import os
 from psycopg2.extras import RealDictCursor
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 from src.POD_TimeTracker import *
 from src.Authentication import *
@@ -302,12 +302,13 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
             "message": str(e)
         }
 
-class WarehouseManagement_View(BaseModel):
+### Warehouse - Statistical ###
+class WarehouseStatistical_View(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
 
-@app.post("/WS/WarehouseManagement_View", tags=["Warehouse"])
-async def WarehouseManagement_View_api(input: WarehouseManagement_View):
+@app.post("/WS/WarehouseStatistical_View", tags=["Warehouse"])
+async def WarehouseStatistical_View_api(input: WarehouseStatistical_View):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -317,20 +318,20 @@ async def WarehouseManagement_View_api(input: WarehouseManagement_View):
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
                 }
         else:
-            return WarehouseManagement_View_function(input, conn)
+            return WarehouseStatistical_View_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 
-class WarehouseManagement_View_Detail(BaseModel):
+class WarehouseStatistical_View_Detail(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     id: int = Field(default=1, example=1)
 
-@app.post("/WS/WarehouseManagement_View_Detail", tags=["Warehouse"])
-async def WarehouseManagement_View_Detail_api(input: WarehouseManagement_View_Detail):
+@app.post("/WS/WarehouseStatistical_View_Detail", tags=["Warehouse"])
+async def WarehouseStatistical_View_Detail_api(input: WarehouseStatistical_View_Detail):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -340,37 +341,35 @@ async def WarehouseManagement_View_Detail_api(input: WarehouseManagement_View_De
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
                 }
         else:
-            return WarehouseManagement_View_Detail_function(input, conn)
+            return WarehouseStatistical_View_Detail_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 
-class FormWarehouseManagement(BaseModel):
+class FormWarehouseStatistical(BaseModel):
     id: int = Field(default=1, example=1)
-    device_code: str = Field(default="ES192-5-A2302", example="ES192-5-A2302")       
-    series_number: str = Field(default="series_number", example="series_number")
     product_name: str = Field(default="Product Name", example="Product Name")
-    date_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
-    location: str = Field(default="Location", example="Location")
     description: str = Field(default="Description", example="Description")
-    brand: str = Field(default="Brand", example="Brand")
-    origin: str = Field(default="Origin", example="Origin")
-    entered_by: str = Field(default="hoanvlh", example="hoanvlh")
-    product_type: str = Field(default="Import", example="Import") # Import, Export
-    quantity: int = Field(default=1, example=1)
-    unit: str = Field(default="Cái", example="Cái")
-    status: int = Field(default=1, example=1) # 1: Available, 0: Not available  
+    time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
+    origin: str = Field(default="Origin", example="Origin")  
+    unit: str = Field(default="Cái", example="Cái")  
+    quantity: int = Field(default=1, example=1) 
+    seri_number: str = Field(default="seri_number", example="seri_number")
+    location: str = Field(default="location", example="location")
+    entered_by: str = Field(default="entered_by", example="entered_by")
+    status: int = Field(default=1, example=1) # 1: Available, 0: Not available 
 
-class WarehouseManagement_DML(BaseModel):
+class WarehouseStatistical_DML(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
-    form: FormWarehouseManagement
+    form: FormWarehouseStatistical
 
-@app.post("/WS/WarehouseManagement_DML", tags=["Warehouse"])
-async def WarehouseManagement_DML_api(input: WarehouseManagement_DML):
+@app.post("/WS/WarehouseStatistical_DML", tags=["Warehouse"])
+async def WarehouseStatistical_DML_api(input: WarehouseStatistical_DML):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
         session = check_session(conn, input.owner)
@@ -381,11 +380,68 @@ async def WarehouseManagement_DML_api(input: WarehouseManagement_DML):
                 }
         else:
             if input.dml_action == "insert":
-                return WarehouseManagement_DML_Insert_function(input, conn)
+                return WarehouseStatistical_DML_Insert_function(input, conn)
             elif input.dml_action == "update":
-                return WarehouseManagement_DML_Update_function(input, conn)
+                return WarehouseStatistical_DML_Update_function(input, conn)
             elif input.dml_action == "delete":
-                return WarehouseManagement_DML_Delete_function(input, conn)
+                return WarehouseStatistical_DML_Delete_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    
+from fastapi import Form
+@app.post("/WS/WarehouseStatistical_Upload", tags=["Warehouse"])
+async def WarehouseStatistical_Upload_api(
+    request_id: str = Form("evisor-1234567890", example="evisor-1234567890"),
+    owner: str = Form("hoanvlh", example="hoanvlh"),
+    file: UploadFile = File(...)):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, owner)
+
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseStatistical_Upload_function(conn, file)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+### Warehouse - Import, Export ###
+
+class WarehouseImportExport_View(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    option: str = Field(default="import", example="import")  # "import" hoặc "export"
+
+@app.post("/WS/WarehouseImportExport_View", tags=["Warehouse"])
+async def WarehouseImportExport_View_api(input: WarehouseImportExport_View):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        option_map = {
+            "import": "WS_Import",
+            "export": "WS_Export"
+        }
+        table_name = option_map.get(input.option.lower())
+
+        if not table_name:
+            return {
+                "status": "error",
+                "message": f"Tùy chọn '{input.option}' không hợp lệ. Chỉ chấp nhận 'import' hoặc 'export'."
+            }
+        return WarehouseImportExport_View_function(conn, table_name)
     except Exception as e:
         return {
             "status": "error",
@@ -414,6 +470,232 @@ async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
             "status": "error",
             "message": str(e)
         }
+
+
+class WarehouseImportExport_View_Detail(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    id: int = Field(default=1, example=1)
+    option: str = Field(default="import", example="import")  # "import" hoặc "export"
+
+
+@app.post("/WS/WarehouseImportExport_View_Detail", tags=["Warehouse"])
+async def WarehouseImportExport_View_Detail_api(input: WarehouseImportExport_View_Detail):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        option_map = {
+            "import": "WS_Import",
+            "export": "WS_Export"
+        }
+        table_name = option_map.get(input.option.lower())
+        if not table_name:
+            return {
+                "status": "error",
+                "message": f"Tùy chọn '{input.option}' không hợp lệ. Chỉ chấp nhận 'import' hoặc 'export'."
+            }
+        return WarehouseImportExport_View_Detail_function(input, conn, table_name)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+    
+class FormWarehouseImport(BaseModel):
+    id: int = Field(default=1, example=1)
+    import_id: int = Field(default=1, example=1)
+    time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    import_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    project_code: str = Field(default="project_code", example="project_code")
+    product_name: str = Field(default="Product Name", example="Product Name")
+    part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
+    origin: str = Field(default="Origin", example="Origin")
+    quantity: int = Field(default=1, example=1) 
+    seri_number: str = Field(default="seri_number", example="seri_number")
+
+class FormWarehouseExport(BaseModel):
+    id: int = Field(default=1, example=1)
+    export_id: int = Field(default=1, example=1)
+    time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    export_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    project_code: str = Field(default="project_code", example="project_code")
+    product_name: str = Field(default="Product Name", example="Product Name")
+    part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
+    origin: str = Field(default="Origin", example="Origin")
+    quantity: int = Field(default=1, example=1) 
+    seri_number: str = Field(default="seri_number", example="seri_number")
+
+class WarehouseImportExport_DML(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    option: str = Field(default="import", example="import") # "import", "export"
+    dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
+    form: Union[FormWarehouseImport, FormWarehouseExport]
+
+@app.post("/WS/WarehouseImportExport_DML", tags=["Warehouse"])
+async def WarehouseImportExport_DML_api(input: WarehouseImportExport_DML):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        if input.dml_action == "insert":
+            return WarehouseImportExport_DML_Insert_function(input, conn, input.option)
+        elif input.dml_action == "update":
+            return WarehouseImportExport_DML_Update_function(input, conn, input.option)
+        elif input.dml_action == "delete":
+            return WarehouseImportExport_DML_Delete_function(input, conn, input.option)
+        else:
+            return {"status": "error", "message": "DML action không hợp lệ. Chỉ hỗ trợ 'insert', 'update', 'delete'."}
+
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+    
+from fastapi import Form
+@app.post("/WS/WarehouseImportExport_Upload", tags=["Warehouse"])
+async def WarehouseImportExport_Upload_api(
+    request_id: str = Form("evisor-1234567890"),
+    owner: str = Form("hoanvlh"),
+    option: str = Form("import"),  # "import" hoặc "export"
+    file: UploadFile = File(...)
+):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseImportExport_Upload_function(conn, file, option)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+    
+# ### Warehouse - Export ###
+
+# class WarehouseExport_View(BaseModel):
+#     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+#     owner: str = Field(default="hoanvlh", example="hoanvlh")
+
+# @app.post("/WS/WarehouseExport_View", tags=["Warehouse"])
+# async def WarehouseExport_View_api(input: WarehouseExport_View):
+#     try:
+#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+#         session = check_session(conn, input.owner)
+#         if not session:
+#             return {
+#                 "status": "error", 
+#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+#                 }
+#         else:
+#             return WarehouseExport_View_function(input, conn)
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+
+# class WarehouseExport_View_Detail(BaseModel):
+#     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+#     owner: str = Field(default="hoanvlh", example="hoanvlh")
+#     id: int = Field(default=1, example=1)
+
+# @app.post("/WS/WarehouseExport_View_Detail", tags=["Warehouse"])
+# async def WarehouseExport_View_Detail_api(input: WarehouseExport_View_Detail):
+#     try:
+#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+#         session = check_session(conn, input.owner)
+#         if not session:
+#             return {
+#                 "status": "error", 
+#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+#                 }
+#         else:
+#             return WarehouseExport_View_Detail_function(input, conn)
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+    
+# class FormWarehouseExport(BaseModel):
+#     id: int = Field(default=1, example=1)
+#     Export_id: int = Field(default=1, example=1)
+#     time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+#     Export_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+#     project_code: str = Field(default="project_code", example="project_code")
+#     product_name: str = Field(default="Product Name", example="Product Name")
+#     part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
+#     origin: str = Field(default="Origin", example="Origin")
+#     quantity: int = Field(default=1, example=1) 
+#     seri_number: str = Field(default="seri_number", example="seri_number")
+
+# class WarehouseExport_DML(BaseModel):
+#     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+#     owner: str = Field(default="hoanvlh", example="hoanvlh")
+#     dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
+#     form: FormWarehouseExport
+
+# @app.post("/WS/WarehouseExport_DML", tags=["Warehouse"])
+# async def WarehouseExport_DML_api(input: WarehouseExport_DML):
+#     try:
+#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+#         session = check_session(conn, input.owner)
+#         if not session:
+#             return {
+#                 "status": "error", 
+#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+#                 }
+#         else:
+#             if input.dml_action == "insert":
+#                 return WarehouseExport_DML_Insert_function(input, conn)
+#             elif input.dml_action == "update":
+#                 return WarehouseExport_DML_Update_function(input, conn)
+#             elif input.dml_action == "delete":
+#                 return WarehouseExport_DML_Delete_function(input, conn)
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+
+# from fastapi import Form
+# @app.post("/WS/WarehouseExport_Upload", tags=["Warehouse"])
+# async def WarehouseExport_Upload_api(
+#     request_id: str = Form("evisor-1234567890", example="evisor-1234567890"),
+#     owner: str = Form("hoanvlh", example="hoanvlh"),
+#     file: UploadFile = File(...)):
+#     try:
+#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+#         session = check_session(conn, owner)
+
+#         if not session:
+#             return {
+#                 "status": "error",
+#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+#             }
+
+#         return WarehouseExport_Upload_function(conn, file)
+
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
 
 ### Authentication
 class Authentication(BaseModel):
