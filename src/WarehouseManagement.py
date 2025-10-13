@@ -349,15 +349,15 @@ def WarehouseImportExport_DML_Insert_function(input, conn, option):
         if option == "import":
             table_name = "WS_Import"
             id_field = "import_id"
-            id_value = input.form.import_id
+            id_value = input.form.ticket_id
             time_field = "import_time"
-            time_value = input.form.import_time
+            time_value = input.form.ticket_time
         elif option == "export":
             table_name = "WS_Export"
             id_field = "export_id"
-            id_value = input.form.export_id
+            id_value = input.form.ticket_id
             time_field = "export_time"
-            time_value = input.form.export_time
+            time_value = input.form.ticket_time
         else:
             return {
                 "status": "error", 
@@ -407,21 +407,22 @@ def WarehouseImportExport_DML_Insert_function(input, conn, option):
         cursor.close()
 
 def WarehouseImportExport_DML_Update_function(input, conn, option):
-    try:
+    # try:
         cursor = conn.cursor()
+        print(input.form.ticket_time)
 
         if option == "import":
             table_name = "WS_Import"
             id_field = "import_id"
-            id_value = input.form.import_id
+            id_value = input.form.ticket_id
             time_field = "import_time"
-            time_value = input.form.import_time
+            time_value = input.form.ticket_time if input.form.ticket_time else None
         elif option == "export":
             table_name = "WS_Export"
             id_field = "export_id"
-            id_value = input.form.export_id
+            id_value = input.form.ticket_id
             time_field = "export_time"
-            time_value = input.form.export_time
+            time_value = input.form.ticket_time if input.form.ticket_time else None
         else:
             return {
                 "status": "error", 
@@ -472,15 +473,15 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
             "message": f"Đã cập nhật danh mục ID {input.form.id}."
         }
 
-    except Exception as e:
-        conn.rollback()
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    # except Exception as e:
+    #     conn.rollback()
+    #     return {
+    #         "status": "error",
+    #         "message": str(e)
+    #     }
 
-    finally:
-        cursor.close()
+    # finally:
+    #     cursor.close()
 
 def WarehouseImportExport_DML_Delete_function(input, conn, option):
     try:

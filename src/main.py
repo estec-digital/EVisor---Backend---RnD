@@ -448,29 +448,28 @@ async def WarehouseImportExport_View_api(input: WarehouseImportExport_View):
             "message": str(e)
         }
     
-class WarehouseManagement_By_Date(BaseModel):
-    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
-    owner: str = Field(default="hoanvlh", example="hoanvlh")
-    date: str = Field(default="2025-09-30", example="2025-09-30")
+# class WarehouseManagement_By_Date(BaseModel):
+#     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+#     owner: str = Field(default="hoanvlh", example="hoanvlh")
+#     date: str = Field(default="2025-09-30", example="2025-09-30")
 
-@app.post("/WS/WarehouseManagement_By_Date", tags=["Warehouse"])
-async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
-    try:
-        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error", 
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-                }
-        else:
-            return WarehouseManagement_By_Date_function(input, conn)
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
+# @app.post("/WS/WarehouseManagement_By_Date", tags=["Warehouse"])
+# async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
+#     try:
+#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+#         session = check_session(conn, input.owner)
+#         if not session:
+#             return {
+#                 "status": "error", 
+#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+#                 }
+#         else:
+#             return WarehouseManagement_By_Date_function(input, conn)
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
 
 class WarehouseImportExport_View_Detail(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
@@ -506,23 +505,23 @@ async def WarehouseImportExport_View_Detail_api(input: WarehouseImportExport_Vie
             "message": str(e)
     }
     
-class FormWarehouseImport(BaseModel):
-    id: int = Field(default=1, example=1)
-    import_id: int = Field(default=1, example=1)
-    time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
-    import_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
-    project_code: str = Field(default="project_code", example="project_code")
-    product_name: str = Field(default="Product Name", example="Product Name")
-    part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
-    origin: str = Field(default="Origin", example="Origin")
-    quantity: int = Field(default=1, example=1) 
-    seri_number: str = Field(default="seri_number", example="seri_number")
+# class FormWarehouseImport(BaseModel):
+#     id: int = Field(default=1, example=1)
+#     import_id: int = Field(default=1, example=1)
+#     time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+#     import_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+#     project_code: str = Field(default="project_code", example="project_code")
+#     product_name: str = Field(default="Product Name", example="Product Name")
+#     part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
+#     origin: str = Field(default="Origin", example="Origin")
+#     quantity: int = Field(default=1, example=1) 
+#     seri_number: str = Field(default="seri_number", example="seri_number")
 
-class FormWarehouseExport(BaseModel):
+class FormWarehouseImportExport(BaseModel):
     id: int = Field(default=1, example=1)
-    export_id: int = Field(default=1, example=1)
+    ticket_id: int = Field(default=1, example=1)
     time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
-    export_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    ticket_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
     project_code: str = Field(default="project_code", example="project_code")
     product_name: str = Field(default="Product Name", example="Product Name")
     part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
@@ -535,7 +534,8 @@ class WarehouseImportExport_DML(BaseModel):
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     option: str = Field(default="import", example="import") # "import", "export"
     dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
-    form: Union[FormWarehouseImport, FormWarehouseExport]
+    # form: Union[FormWarehouseImport, FormWarehouseExport]
+    form: FormWarehouseImportExport
 
 @app.post("/WS/WarehouseImportExport_DML", tags=["Warehouse"])
 async def WarehouseImportExport_DML_api(input: WarehouseImportExport_DML):
