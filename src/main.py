@@ -16,6 +16,7 @@ from src.WarehouseManagement import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+from fastapi import Form
 
 # Tải biến môi trường từ file .env
 load_dotenv()
@@ -447,36 +448,12 @@ async def WarehouseImportExport_View_api(input: WarehouseImportExport_View):
             "status": "error",
             "message": str(e)
         }
-    
-# class WarehouseManagement_By_Date(BaseModel):
-#     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
-#     owner: str = Field(default="hoanvlh", example="hoanvlh")
-#     date: str = Field(default="2025-09-30", example="2025-09-30")
-
-# @app.post("/WS/WarehouseManagement_By_Date", tags=["Warehouse"])
-# async def WarehouseManagement_By_Date_api(input: WarehouseManagement_By_Date):
-#     try:
-#         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-#         session = check_session(conn, input.owner)
-#         if not session:
-#             return {
-#                 "status": "error", 
-#                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-#                 }
-#         else:
-#             return WarehouseManagement_By_Date_function(input, conn)
-#     except Exception as e:
-#         return {
-#             "status": "error",
-#             "message": str(e)
-#         }
 
 class WarehouseImportExport_View_Detail(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     id: int = Field(default=1, example=1)
     option: str = Field(default="import", example="import")  # "import" hoặc "export"
-
 
 @app.post("/WS/WarehouseImportExport_View_Detail", tags=["Warehouse"])
 async def WarehouseImportExport_View_Detail_api(input: WarehouseImportExport_View_Detail):
@@ -584,7 +561,29 @@ async def WarehouseImportExport_Upload_api(
             "status": "error", 
             "message": str(e)
     }
-    
+
+class WarehouseImportExport_Download(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    option: str = Field(default="import", example="import") # "import", "export"
+    ticket_id: str = Field(default=1, example=1)
+
+@app.post("/WS/WarehouseImportExport_Download", tags=["Warehouse"])
+async def WarehouseImportExport_Download_api(input: WarehouseImportExport_Download):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseImportExport_Download_function(conn, input, minio_client,  MINIO_BUCKET)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
 # ### Warehouse - Export ###
 
 # class WarehouseExport_View(BaseModel):

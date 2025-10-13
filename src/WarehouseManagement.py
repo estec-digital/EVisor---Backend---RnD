@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from psycopg2 import sql
+from minio import Minio
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 
 def WarehouseStatistical_View_function(input, conn):
     try:
@@ -620,6 +622,120 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
         return {
             "status": "error", 
             "message": str(e)}
+    finally:
+        if cursor:
+            cursor.close()
+
+def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MINIO_BUCKET: str):
+    # SốTT	Thời gian	Mã Dự án	Tên hàng	Mã hàng	Hãng	Số lượng	Seri No.
+
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        # --- Chọn bảng phù hợp ---
+        if input.option == "import":
+            query = '''
+                SELECT * FROM "WS_Import"
+                WHERE "import_id" = %s
+            '''
+            object_prefix = "Import"
+        elif input.option == "export":
+            query = '''
+                SELECT * FROM "WS_Export"
+                WHERE "export_id" = %s
+            '''
+            object_prefix = "Export"
+        else:
+            raise ValueError("Invalid option. Must be 'import' or 'export'.")
+
+        # --- Lấy dữ liệu ---
+        cursor.execute(query, (input.ticket_id,))
+        data = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(data, columns=columns)
+        columns_file = ["STT", "Thời gian", "Mã Dự án", "Tên hàng", "Mã hàng", "Hãng", "Số lượng", "Seri No."]
+        df["STT"] = range(1, len(df) + 1)
+        df["Thời gian"] = df["time"]
+        df["Mã Dự án"] = df["project_code"]
+        df["Tên hàng"] = df["product_name"]
+        df["Mã hàng"] = df["part_no"]
+        df["Hãng"] = df["origin"]
+        df["Số lượng"] = df["quantity"]
+        df["Seri No."] = df["seri_number"]
+        df = df[columns_file]
+        # --- Ghi ra file tạm ---
+        filename = f"{object_prefix}_{input.ticket_id}.xlsx"
+        path_file = f"../minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
+        os.makedirs(os.path.dirname(path_file), exist_ok=True)
+        with pd.ExcelWriter(path_file, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name="Sheet1", startrow=1)
+            workbook = writer.book
+            worksheet = writer.sheets["Sheet1"]
+
+            # --- Phieu nhap / phieu xuat ----
+            worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(df.columns))
+            cell_title = worksheet.cell(row=1, column=1)
+            if object_prefix == "Import":
+                cell_title.value = f"PHIẾU NHẬP"
+            else:
+                cell_title.value = f"PHIẾU XUẤT"
+            cell_title.font = Font(size=18, bold=True)
+            cell_title.fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+            cell_title.alignment = Alignment(horizontal="center", vertical="center")
+
+            # --- Style header dữ liệu (dòng 2) ---
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                                top=Side(style='thin'), bottom=Side(style='thin'))
+
+            for col_idx, col in enumerate(df.columns, 1):
+                cell = worksheet.cell(row=2, column=col_idx)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # --- Border cho tất cả ô dữ liệu ---
+            for row in worksheet.iter_rows(min_row=3, max_row=worksheet.max_row,
+                                        min_col=1, max_col=worksheet.max_column):
+                for cell in row:
+                    cell.border = thin_border
+
+        # --- Upload lên MinIO ---
+        object_name = f"data/Workshop/Warehouse/{object_prefix}/{filename}"
+        with open(path_file, "rb") as file_data:
+            file_stat = os.stat(path_file)
+            minio_client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                file_data,
+                length=file_stat.st_size,
+                content_type="text/csv"
+            )
+
+        # --- Xóa file local sau khi upload ---
+        # os.remove(path_file)
+
+        # --- Tạo URL tải file ---
+        url = minio_client.presigned_get_object(
+            MINIO_BUCKET,
+            object_name,
+            expires=timedelta(hours=1)
+        )
+
+        return {
+            "status": "success",
+            "url": url
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
     finally:
         if cursor:
             cursor.close()
