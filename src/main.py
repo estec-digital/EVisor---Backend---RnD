@@ -17,6 +17,7 @@ import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from fastapi import Form
+from pydantic import validator
 
 # Tải biến môi trường từ file .env
 load_dotenv()
@@ -496,15 +497,21 @@ async def WarehouseImportExport_View_Detail_api(input: WarehouseImportExport_Vie
 
 class FormWarehouseImportExport(BaseModel):
     id: int = Field(default=1, example=1)
-    ticket_id: int = Field(default=1, example=1)
-    time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
-    ticket_time: Optional[datetime] = Field(default=None, example="2025-03-17T09:48:50.222Z")
+    ticket_id: str = Field(default=1, example=1)
+    time: Optional[datetime] = None
+    ticket_time: Optional[datetime] = None
     project_code: str = Field(default="project_code", example="project_code")
     product_name: str = Field(default="Product Name", example="Product Name")
     part_no: str = Field(default="ES192-5-A2302", example="ES192-5-A2302") 
     origin: str = Field(default="Origin", example="Origin")
     quantity: int = Field(default=1, example=1) 
     seri_number: str = Field(default="seri_number", example="seri_number")
+
+    @validator('time', pre=True)
+    def parse_empty_string_as_none(cls, value):
+        if value == "":
+            return None
+        return value
 
 class WarehouseImportExport_DML(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
@@ -566,7 +573,8 @@ class WarehouseImportExport_Download(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
     option: str = Field(default="import", example="import") # "import", "export"
-    ticket_id: str = Field(default=1, example=1)
+    ticket_id: Optional[str] = Field(default=1, example=1)
+    project_code: Optional[str] = Field(default="example", example="example")
 
 @app.post("/WS/WarehouseImportExport_Download", tags=["Warehouse"])
 async def WarehouseImportExport_Download_api(input: WarehouseImportExport_Download):
@@ -744,3 +752,28 @@ def Authentication_ChangePassword_api(input: Authentication_ChangePassword):
             "status": "error", 
             "message": str(e)
             }
+
+
+# --------------------------------------------------------
+# WebSocket
+# --------------------------------------------------------
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                payload = json.loads(data)
+                # payload example: {"request_id": "...", "owner": "...", "option": "..."}
+                print("Received payload:", payload)
+                
+                # TODO: xử lý logic import/export hoặc gọi DB
+                response_msg = f"Payload processed: {payload['request_id']}"
+                await websocket.send_text(response_msg)
+            except json.JSONDecodeError:
+                await websocket.send_text("Invalid JSON")
+    except WebSocketDisconnect:
+        print("Client disconnected")

@@ -416,13 +416,13 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
         if option == "import":
             table_name = "WS_Import"
             id_field = "import_id"
-            id_value = input.form.ticket_id
+            id_value = str(input.form.ticket_id)
             time_field = "import_time"
             time_value = input.form.ticket_time if input.form.ticket_time else None
         elif option == "export":
             table_name = "WS_Export"
             id_field = "export_id"
-            id_value = input.form.ticket_id
+            id_value = str(input.form.ticket_id)
             time_field = "export_time"
             time_value = input.form.ticket_time if input.form.ticket_time else None
         else:
@@ -430,7 +430,7 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
                 "status": "error", 
                 "message": "Option không hợp lệ. Chỉ hỗ trợ 'import' hoặc 'export'."
                 }
-
+        print("ticket_id:", id_value)
         query = sql.SQL("""
             UPDATE {table}
             SET 
@@ -451,7 +451,7 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
         )
 
         cursor.execute(query, (
-            id_value,
+            str(id_value),
             input.form.time,
             time_value,
             input.form.project_code,
@@ -634,25 +634,56 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
         cursor = conn.cursor()
         # --- Chọn bảng phù hợp ---
         if input.option == "import":
-            query = '''
-                SELECT * FROM "WS_Import"
-                WHERE "import_id" = %s
-            '''
+            if input.ticket_id:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "import_id" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id,))
+            elif input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "project_code" = %s 
+                '''
+                cursor.execute(query, (input.project_code,))
+
+            elif input.ticket_id and input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "import_id" = %s 
+                    AND "project_code" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id, input.project_code))
             object_prefix = "Import"
         elif input.option == "export":
-            query = '''
-                SELECT * FROM "WS_Export"
-                WHERE "export_id" = %s
-            '''
+            if input.ticket_id:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "export_id" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id,))
+            elif input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "project_code" = %s 
+                '''
+                cursor.execute(query, (input.project_code))
+            elif input.ticket_id and input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "export_id" = %s 
+                    AND "project_code" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id, input.project_code))
             object_prefix = "Export"
         else:
             raise ValueError("Invalid option. Must be 'import' or 'export'.")
 
         # --- Lấy dữ liệu ---
-        cursor.execute(query, (input.ticket_id,))
         data = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(data, columns=columns)
+        print("df:",df)
         columns_file = ["STT", "Thời gian", "Mã Dự án", "Tên hàng", "Mã hàng", "Hãng", "Số lượng", "Seri No."]
         df["STT"] = range(1, len(df) + 1)
         df["Thời gian"] = df["time"]
