@@ -264,6 +264,75 @@ def WarehouseStatistical_Upload_function(conn, file):
     finally:
         cursor.close()
 
+def WarehouseStatistical_Upload_By_ImportExport_function(conn, file):
+    try:
+        filename = file.filename
+        ext = os.path.splitext(filename)[1].lower()
+
+        # Đọc file Excel/CSV
+        if ext == ".xlsx":
+            df = pd.read_excel(file.file, engine="openpyxl", header=1) 
+        elif ext == ".xls":
+            df = pd.read_excel(file.file, engine="xlrd", header=1)
+        elif ext == ".csv":
+            try:
+                df = pd.read_csv(file.file, encoding="utf-8", header=1)
+            except UnicodeDecodeError:
+                df = pd.read_csv(file.file, encoding="latin1", header=1)
+        else:
+            return {"status": "error", "message": "Định dạng file không được hỗ trợ"}
+
+        # Chuẩn hóa dữ liệu
+        df = df.replace({np.nan: None})
+
+        # Map lại cột Excel -> DB (tuỳ thuộc file Excel của bạn)
+        df = df.rename(columns={
+            "Tên hàng": "product_name",
+            "Mã hàng": "part_no",
+            "Số lượng": "quantity",
+            "Hãng": "origin",
+            "Seri No.": "seri_number",
+            "Thời gian": "time"
+        })
+
+        df["status"] = 0
+
+        # Insert vào DB
+        cursor = conn.cursor()
+        for _, row in df.iterrows():
+            cursor.execute("""
+                INSERT INTO "WS_Statistical"
+                (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                row.get("product_name"),
+                row.get("description"),
+                row.get("time"),
+                row.get("part_no"),
+                row.get("origin"),
+                row.get("unit"),
+                row.get("quantity"),
+                row.get("seri_number"),
+                row.get("location"),
+                row.get("entered_by"),
+                row.get("status")
+            ))
+
+        conn.commit()
+
+        return {
+            "status": "success",
+            "message": "Import dữ liệu thành công"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
 ### Warehouse - Import, Export ###
 
 def WarehouseImportExport_View_function(conn, table_name: str):
@@ -625,6 +694,25 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
     finally:
         if cursor:
             cursor.close()
+
+def Warehouse_Check_Seri_Number(conn, seri_number: str, option: int):
+    try:
+        table_mapping = {
+            1: "WS_Statistical",
+            2: "WS_Import", 
+            3: "WS_Export"
+        }
+        if option not in table_mapping:
+            raise ValueError(f"Option không hợp lệ. Chỉ chấp nhận: 1, 2, 3")
+        table_name = table_mapping[option]   
+        with conn.cursor() as cursor:
+            query = f'SELECT COUNT(*) FROM "{table_name}" WHERE "seri_number" = %s'
+            cursor.execute(query, (seri_number,))
+            count = cursor.fetchone()[0]
+            return count == 0  
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra seri_number trong option {option}: {str(e)}")
+        return False
 
 def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MINIO_BUCKET: str):
     # SốTT	Thời gian	Mã Dự án	Tên hàng	Mã hàng	Hãng	Số lượng	Seri No.

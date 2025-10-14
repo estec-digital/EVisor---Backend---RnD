@@ -413,6 +413,28 @@ async def WarehouseStatistical_Upload_api(
             "status": "error",
             "message": str(e)
         }
+    
+from fastapi import Form
+@app.post("/WS/WarehouseStatistical_Upload_By_ImportExport", tags=["Warehouse"])
+async def WarehouseStatistical_Upload_By_ImportExport_api(
+    request_id: str = Form("evisor-1234567890", example="evisor-1234567890"),
+    owner: str = Form("hoanvlh", example="hoanvlh"),
+    file: UploadFile = File(...)):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, owner)
+
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseStatistical_Upload_By_ImportExport_function(conn, file)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 ### Warehouse - Import, Export ###
 
@@ -561,6 +583,51 @@ async def WarehouseImportExport_Upload_api(
             "status": "error", 
             "message": str(e)
     }
+
+class CheckSeriNumber(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    seri_number: str = Field(default="8726391045278", example="8726391045278")
+    option: int = Field(default="1", example=1, description="1=Statistical, 2=Import, 3=Export")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+
+@app.post("/WS/WarehouseCheck_Seri_Number", tags=["Warehouse"])
+async def Warehouse_Check_Seri_Number_api(input: CheckSeriNumber):
+    conn = None
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn"
+            }
+        valid_options = [1, 2, 3]
+        if input.option not in valid_options:
+            return {
+                "status": "error",
+                "message": f"Option không hợp lệ. Chỉ chấp nhận: {valid_options}"
+            }
+        is_unique = Warehouse_Check_Seri_Number(conn, input.seri_number, input.option)
+        table_names = {
+            1: "WS_Statistical",
+            2: "WS_Import",
+            3: "WS_Export"
+        }
+        table_name = table_names[input.option]
+        
+        return {
+            "status": is_unique,
+            "message": f"Số seri '{input.seri_number}' {'có thể sử dụng' if is_unique else 'đã tồn tại'} trong bảng {table_name}",
+        }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        if conn:
+            conn.close()
 
 class WarehouseImportExport_Download(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
