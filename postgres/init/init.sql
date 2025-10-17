@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "id" SERIAL PRIMARY KEY,  
     "product_name" VARCHAR(255),
     "description" VARCHAR(255),
-    "time" timestamp,
+    "time" TIMESTAMP,
     "part_no" VARCHAR(255),
     "origin" VARCHAR(255),
     "entered_by" VARCHAR(255),
@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "quantity" INTEGER,
     "seri_number" VARCHAR(255),
     "location" VARCHAR(255),
-    "status" INTEGER DEFAULT 0
+    "status" INTEGER DEFAULT 0,
+    "manufacturing_date" TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS "WS_Import" (
@@ -81,5 +82,6 @@ CREATE TABLE IF NOT EXISTS "WS_Export" (
     "part_no" VARCHAR(255),               
     "origin" VARCHAR(255),                  
     "quantity" INTEGER,                     
-    "seri_number" VARCHAR(255)
+    "seri_number" VARCHAR(255),
+    "cabinet" VARCHAR(255)
 );

@@ -236,6 +236,7 @@ class FilterModel(BaseModel):
     project_code: Optional[List[str]] = []
     start_date: Optional[datetime] = "2025-01-01T09:48:50.222Z"
     end_date: Optional[datetime] = "2025-03-17T09:48:50.222Z"
+    version: Optional[int] = 1
 
 class WorkManagement_View(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
@@ -703,8 +704,9 @@ async def WarehouseImportExport_Download_api(input: WarehouseImportExport_Downlo
 #             "status": "error",
 #             "message": str(e)
 #         }
-
-### Authentication
+# --------------------------------------------------------
+# Authentication
+# --------------------------------------------------------
 class Authentication(BaseModel):
     username: str = Field(example="hoanvlh")
     password: str = Field(example="Ef27Xw34")

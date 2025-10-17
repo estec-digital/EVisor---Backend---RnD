@@ -276,7 +276,7 @@ def WarehouseImportExport_View_function(conn, table_name: str):
                 "message": f"Bảng '{table_name}' không được phép truy cập."
             }
 
-        query = f'SELECT * FROM "{table_name}"'
+        query = f'''SELECT * FROM "{table_name}" ORDER BY "import_time" DESC'''
         cursor.execute(query)
         rows = cursor.fetchall()
 
@@ -537,13 +537,10 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
         elif ext == ".xls":
             df = pd.read_excel(file.file, engine="xlrd", header=1)
         elif ext == ".csv":
-            try:
-                df = pd.read_csv(file.file, encoding="utf-8", header=1)
-            except UnicodeDecodeError:
-                df = pd.read_csv(file.file, encoding="latin1", header=1)
+            df = pd.read_csv(file.file, encoding="latin1", header=1)
         else:
             return {"status": "error", "message": "Định dạng file không được hỗ trợ."}
-
+        print(df)
         df = df.replace({np.nan: None})
         df = df.where(pd.notnull(df), None)
 
@@ -582,37 +579,49 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
             time_col = "export_time"
         else:
             return {"status": "error", "message": f"Tùy chọn '{option}' không hợp lệ."}
+        
+        # Nhân bản theo số lượng bảng ghi
+        if option == "export":
+            expanded_rows = []
+            for _, row in df.iterrows():
+                qty = int(row["quantity"]) if row["quantity"] else 1
+                for _ in range(qty):
+                    new_row = row.copy()
+                    new_row["quantity"] = 1
+                    expanded_rows.append(new_row)
+            df = pd.DataFrame(expanded_rows)
+            df = df.set_index("STT")
+            df = df.reset_index(drop=True)
+        print("df:", df.columns)
+
 
         datetime_columns = ["time", time_col]
         for col in datetime_columns:
             if col in df.columns:
                 df[col] = df[col].replace({pd.NaT: None})
+        
+        print("df:", df)
 
         cursor = conn.cursor()
-        for _, row in df.iterrows():
-            time_value = row.get("time")
-            time_col_value = row.get(time_col)
-            
-            if time_col not in df.columns and time_col_value is None:
-                time_col_value = now
-            
+        insert_query = f"""
+            INSERT INTO "{table_name}"
+            ({id_col}, "time", {time_col}, "project_code", "product_name", "part_no", "origin", "quantity", "seri_number")
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+        for _, row in df.iterrows():       
             values = (
                 row.get(id_col),  
-                time_value,         
-                time_col_value,   
+                row.get("time"),         
+                datetime.now(),   
                 row.get("project_code"),
                 row.get("product_name"), 
                 row.get("part_no"),
                 row.get("origin"),
                 row.get("quantity"),
-                row.get("seri_number")
+                row.get("seri_number"),
             )
-            
-            cursor.execute(f"""
-                INSERT INTO "{table_name}"
-                ({id_col}, time, {time_col}, project_code, product_name, part_no, origin, quantity, seri_number)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, values)
+            print("values:", values)
+            cursor.execute(insert_query, values)
 
         conn.commit()
         return {"status": "success", "message": f"Tải dữ liệu {option} thành công."}
@@ -695,8 +704,11 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
         df["Seri No."] = df["seri_number"]
         df = df[columns_file]
         # --- Ghi ra file tạm ---
-        filename = f"{object_prefix}_{input.ticket_id}.xlsx"
-        path_file = f"../minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
+        if input.ticket_id:
+            filename = f"{object_prefix}_{input.ticket_id}.xlsx"
+        elif input.project_code:
+            filename = f"{object_prefix}_{input.project_code}.xlsx"
+        path_file = f"./minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
         os.makedirs(os.path.dirname(path_file), exist_ok=True)
         with pd.ExcelWriter(path_file, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name="Sheet1", startrow=1)
@@ -742,7 +754,7 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
                 object_name,
                 file_data,
                 length=file_stat.st_size,
-                content_type="text/csv"
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         # --- Xóa file local sau khi upload ---

@@ -185,6 +185,10 @@ def WorkManagement_View_function(input: BaseModel, conn):
             print(start_date, end_date)
             query += ' AND "start_date" <= %s AND "end_date" >= %s'
             params.extend([end_date, start_date])
+        
+        if filter.version:
+            query += f" AND \"version\" = %s"
+            params.append(filter.version)
 
         print("query", query)
         print("params:", params)
