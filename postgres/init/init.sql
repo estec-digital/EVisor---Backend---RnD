@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS "WorkManagement" (
 
 CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "id" SERIAL PRIMARY KEY,  
-    "product_name" VARCHAR(255),
-    "description" VARCHAR(255),
+    "product_name" TEXT,
+    "description" TEXT,
     "time" TIMESTAMP,
     "part_no" VARCHAR(255),
     "origin" VARCHAR(255),
@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS "WS_Import" (
     "part_no" VARCHAR(255),               
     "origin" VARCHAR(255),                  
     "quantity" INTEGER,                     
-    "seri_number" VARCHAR(255)
+    "seri_number" VARCHAR(255),
+    "deleted" BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS "WS_Export" (

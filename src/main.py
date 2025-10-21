@@ -304,11 +304,22 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
             "status": "error",
             "message": str(e)
         }
+# ----------------------------------------------------------------
+### Warehouse - Statistical 
+# ----------------------------------------------------------------
 
-### Warehouse - Statistical ###
+class FilterModel_WarehouseStatistical(BaseModel):
+    part_no: Optional[str] 
+    origin: Optional[str] 
+    seri_number: Optional[str] 
+    project_code: Optional[str] 
+
 class WarehouseStatistical_View(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
     owner: str = Field(default="hoanvlh", example="hoanvlh")
+    filter: FilterModel_WarehouseStatistical
+    pagination: int = Field(default=1, example=1)
+    page_size: int = Field(default=20, example=20)
 
 @app.post("/WS/WarehouseStatistical_View", tags=["Warehouse"])
 async def WarehouseStatistical_View_api(input: WarehouseStatistical_View):

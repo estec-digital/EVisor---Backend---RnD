@@ -5,32 +5,165 @@ from datetime import datetime, timedelta
 from psycopg2 import sql
 from minio import Minio
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from psycopg2.extras import RealDictCursor
+
+# def WarehouseStatistical_View_function(input, conn):
+#     try:
+#         # print(input)
+#         cursor = conn.cursor()
+#         query = """ 
+#             SELECT * FROM "WS_Statistical"
+#             WHERE 1=1
+#         """
+#         params = []
+
+#         if input.filter.part_no:
+#             query += " AND \"part_no\" ILIKE %s"
+#             params.append(f"%{input.filter.part_no}%")
+
+#         if input.filter.origin:
+#             query += " AND \"origin\" ILIKE %s"
+#             params.append(f"%{input.filter.origin}%")
+
+#         if input.filter.seri_number:
+#             query += " AND \"seri_number\" ILIKE %s"
+#             params.append(f"%{input.filter.seri_number}%")
+
+#         query += " ORDER BY \"time\" DESC LIMIT 1000"
+
+#         cursor.execute(query, params)
+#         rows = cursor.fetchall()
+#         items = []
+#         for row in rows:
+#             # --- Lấy tổng nhập và tổng xuất cho part_no hiện tại ---
+#             cursor2 = conn.cursor()
+#             cursor2.execute("""
+#                 SELECT 
+#                     COALESCE(SUM("quantity"), 0)
+#                 FROM "WS_Import"
+#                 WHERE "part_no" = %s AND "deleted" = FALSE
+#             """, (row[4],))
+#             total_import = cursor2.fetchone()[0]
+
+#             cursor2.execute("""
+#                 SELECT 
+#                     COALESCE(SUM("quantity"), 0)
+#                 FROM "WS_Export"
+#                 WHERE "part_no" = %s AND "deleted" = FALSE
+#             """, (row[4],))
+#             total_export = cursor2.fetchone()[0]
+#             cursor2.close()
+#             # --- Tính tồn kho ---
+#             stock_quantity = total_import - total_export
+
+#             item = {
+#                 "id": row[0],
+#                 "product_name": row[1],
+#                 "description": row[2],
+#                 "time": row[3],
+#                 "part_no": row[4],
+#                 "origin": row[5],
+#                 "unit": row[6],
+#                 "quantity_import": total_import,
+#                 "quantity_export": total_export,
+#                 "quantity_stock": row[7] + stock_quantity,
+#                 "seri_number": row[8],
+#                 "location": row[9],
+#                 "entered_by": row[10],
+#                 "status": row[11],
+#             }
+#             items.append(item)
+        
+#         # print(len(items))
+
+#         start_idx = (input.pagination - 1) * input.page_size
+#         end_idx = input.pagination * input.page_size
+#         items = items[start_idx:end_idx]
+#         # print(len(items))
+#         return {
+#             "status": "success",
+#             "data": items
+#         }
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+#     finally:
+#         cursor.close()
 
 def WarehouseStatistical_View_function(input, conn):
     try:
-        cursor = conn.cursor()
+        # print(input)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         query = """ 
-            SELECT * FROM "WS_Statistical" 
+            SELECT 
+                i.*, 
+                s."product_name", 
+                s."description", 
+                s."origin", 
+                s."entered_by", 
+                s."unit", 
+                s."location",
+                COALESCE(e."quantity", 0) AS quantity_export
+            FROM "WS_Import" i
+            LEFT JOIN "WS_Statistical" s
+                ON i."statistical_id" = s."id"
+            LEFT JOIN "WS_Export" e 
+                ON i."seri_number" = e."seri_number" AND e."deleted" = FALSE
+            WHERE i."deleted" = FALSE
         """
-        cursor.execute(query)
+        params = []
+
+        if input.filter.part_no:
+            query += " AND i.\"part_no\" ILIKE %s"
+            params.append(f"%{input.filter.part_no}%")
+
+        if input.filter.origin:
+            query += " AND s.\"origin\" ILIKE %s"
+            params.append(f"%{input.filter.origin}%")
+
+        if input.filter.seri_number:
+            query += " AND i.\"seri_number\" ILIKE %s"
+            params.append(f"%{input.filter.seri_number}%")
+
+        if input.filter.project_code:
+            query += " AND i.\"project_code\" ILIKE %s"
+            params.append(f"%{input.filter.project_code}%")
+
+        else:
+            query += " ORDER BY i.\"time\" DESC LIMIT 1000"
+
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         items = []
         for row in rows:
             item = {
-                "id": row[0],
-                "product_name": row[1],
-                "description": row[2],
-                "time": row[3],
-                "part_no": row[4],
-                "origin": row[5],
-                "unit": row[6],
-                "quantity": row[7],
-                "seri_number": row[8],
-                "location": row[9],
-                "entered_by": row[10],
-                "status": row[11]
+                "id": row.get("id", None),
+                "product_name": row.get("product_name", ""),
+                "description": row.get("description", ""),
+                "time": row.get("time", ""),
+                "project_code": row.get("project_code", ""),
+                "part_no": row.get("part_no", ""),
+                "origin": row.get("origin", ""),
+                "unit": row.get("unit", ""),
+                "quantity_import": row.get("quantity", ""),
+                "quantity_export": row.get("quantity_export", ""),
+                "quantity_stock": row.get("quantity", "") - row.get("quantity_export", ""),
+                "seri_number": row.get("seri_number", ""),
+                "location": row.get("location", ""),
+                "entered_by": row.get("entered_by", ""),
+                "status": row.get("status", 0),
+                "manufacturing_date": row.get("manufacturing_date", None)
             }
             items.append(item)
+        
+        # print(len(items))
+
+        start_idx = (input.pagination - 1) * input.page_size
+        end_idx = input.pagination * input.page_size
+        items = items[start_idx:end_idx]
+        # print(len(items))
         return {
             "status": "success",
             "data": items
@@ -191,18 +324,18 @@ def WarehouseStatistical_DML_Delete_function(input, conn):
 def WarehouseStatistical_Upload_function(conn, file):
     try:
         filename = file.filename
-        ext = os.path.splitext(filename)[1].lower()
+        ext = os.path.splitext(filename)[-1].lower()
 
         # Đọc file Excel/CSV
         if ext == ".xlsx":
-            df = pd.read_excel(file.file, engine="openpyxl", header=1) 
+            df = pd.read_excel(file.file, engine="openpyxl", header=0) 
         elif ext == ".xls":
-            df = pd.read_excel(file.file, engine="xlrd", header=1)
+            df = pd.read_excel(file.file, engine="xlrd", header=0)
         elif ext == ".csv":
             try:
-                df = pd.read_csv(file.file, encoding="utf-8", header=1)
+                df = pd.read_csv(file.file, encoding="utf-8", header=0)
             except UnicodeDecodeError:
-                df = pd.read_csv(file.file, encoding="latin1", header=1)
+                df = pd.read_csv(file.file, encoding="latin1", header=0)
         else:
             return {"status": "error", "message": "Định dạng file không được hỗ trợ"}
 
@@ -211,45 +344,56 @@ def WarehouseStatistical_Upload_function(conn, file):
 
         # Map lại cột Excel -> DB (tuỳ thuộc file Excel của bạn)
         df = df.rename(columns={
-            "Descripton": "description",
-            "Part No.": "part_no",
-            "Origin": "origin",
-            "Unit": "unit",
-            "Qty": "quantity",
-            "Seri number": "seri_number"
+            "Tên sản phẩm": "product_name",
+            "Thông tin sản phẩm": "description",
+            "Ngày tạo": "time",
+            "Mã sản phẩm": "part_no",
+            "Nhà sản xuất": "origin",
+            "Đơn vị": "unit",
+            "Seri sản phẩm": "seri_number",
+            "Người tạo": "entered_by"
         })
 
         # Thêm cột auto
-        if "time" in df.columns:
-            df["time"] = pd.to_datetime(df["time"], dayfirst=True, errors="coerce")
-            df["time"] = df["time"].where(df["time"].notnull(), None)
-        else:
-            df["time"] = datetime.now()
+        # if "time" in df.columns:
+        #     df["time"] = pd.to_datetime(df["time"], dayfirst=True, errors="coerce")
+        #     df["time"] = df["time"].where(df["time"].notnull(), None)
+        # else:
+        #     df["time"] = datetime.now()
 
-        df["status"] = 0
+        df["quantity"] = 1
+        df["location"] = None
+        df["status"] = 1
+        df["manufacturing_date"] = None
+        df["time"] = pd.to_datetime(df["time"], format="%d/%m/%Y", errors="coerce")
+        df["time"] = df["time"].ffill()
 
+        print(df["time"])
+        print(df["time"].head().apply(lambda x: type(x)))
+        print(df["time"].tail().apply(lambda x: type(x)))
+    
         # Insert vào DB
-        cursor = conn.cursor()
-        for _, row in df.iterrows():
-            cursor.execute("""
-                INSERT INTO "WS_Statistical"
-                (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                row.get("product_name"),
-                row.get("description"),
-                row.get("time"),
-                row.get("part_no"),
-                row.get("origin"),
-                row.get("unit"),
-                row.get("quantity"),
-                row.get("seri_number"),
-                row.get("location"),
-                row.get("entered_by"),
-                row.get("status")
-            ))
-
-        conn.commit()
+        with conn.cursor() as cursor:
+            for _, row in df.iterrows():
+                cursor.execute("""
+                    INSERT INTO "WS_Statistical"
+                    (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status, manufacturing_date)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    row["product_name"],
+                    row["description"],
+                    row["time"],
+                    row["part_no"],
+                    row["origin"],
+                    row["unit"],
+                    row["quantity"],
+                    row["seri_number"],
+                    row["location"],
+                    row["entered_by"],
+                    row["status"],
+                    row["manufacturing_date"]
+                ))
+            conn.commit()
 
         return {
             "status": "success",
@@ -261,8 +405,8 @@ def WarehouseStatistical_Upload_function(conn, file):
             "status": "error", 
             "message": str(e)
         }
-    finally:
-        cursor.close()
+    # finally:
+    #     cursor.close()
 
 ### Warehouse - Import, Export ###
 
@@ -276,7 +420,12 @@ def WarehouseImportExport_View_function(conn, table_name: str):
                 "message": f"Bảng '{table_name}' không được phép truy cập."
             }
 
-        query = f'''SELECT * FROM "{table_name}" ORDER BY "import_time" DESC'''
+        query = f'''
+            SELECT * 
+            FROM "{table_name}" 
+            WHERE "deleted" = FALSE
+            ORDER BY "import_time" DESC
+            '''
         cursor.execute(query)
         rows = cursor.fetchall()
 
@@ -314,7 +463,9 @@ def WarehouseImportExport_View_Detail_function(input, conn, table_name: str):
         cursor = conn.cursor()
 
         query = sql.SQL("""
-            SELECT * FROM {table} WHERE id = %s
+            SELECT * 
+            FROM {table} 
+            WHERE id = %s AND "deleted" = FALSE
         """).format(table=sql.Identifier(table_name))
         cursor.execute(query, (input.id,))
         row = cursor.fetchone()
@@ -500,7 +651,10 @@ def WarehouseImportExport_DML_Delete_function(input, conn, option):
                 }
 
         query = sql.SQL("""
-            DELETE FROM {table} WHERE id = %s
+            UPDATE {table} 
+            SET
+                "deleted" = TRUE
+            WHERE "id" = %s
         """).format(
             table=sql.Identifier(table_name)
         )
