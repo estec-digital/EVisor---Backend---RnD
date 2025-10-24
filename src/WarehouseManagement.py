@@ -5,32 +5,173 @@ from datetime import datetime, timedelta
 from psycopg2 import sql
 from minio import Minio
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from psycopg2.extras import RealDictCursor
+import io
+import openpyxl
+
+# def WarehouseStatistical_View_function(input, conn):
+#     try:
+#         # print(input)
+#         cursor = conn.cursor()
+#         query = """ 
+#             SELECT * FROM "WS_Statistical"
+#             WHERE 1=1
+#         """
+#         params = []
+
+#         if input.filter.part_no:
+#             query += " AND \"part_no\" ILIKE %s"
+#             params.append(f"%{input.filter.part_no}%")
+
+#         if input.filter.origin:
+#             query += " AND \"origin\" ILIKE %s"
+#             params.append(f"%{input.filter.origin}%")
+
+#         if input.filter.seri_number:
+#             query += " AND \"seri_number\" ILIKE %s"
+#             params.append(f"%{input.filter.seri_number}%")
+
+#         query += " ORDER BY \"time\" DESC LIMIT 1000"
+
+#         cursor.execute(query, params)
+#         rows = cursor.fetchall()
+#         items = []
+#         for row in rows:
+#             # --- Lấy tổng nhập và tổng xuất cho part_no hiện tại ---
+#             cursor2 = conn.cursor()
+#             cursor2.execute("""
+#                 SELECT 
+#                     COALESCE(SUM("quantity"), 0)
+#                 FROM "WS_Import"
+#                 WHERE "part_no" = %s AND "deleted" = FALSE
+#             """, (row[4],))
+#             total_import = cursor2.fetchone()[0]
+
+#             cursor2.execute("""
+#                 SELECT 
+#                     COALESCE(SUM("quantity"), 0)
+#                 FROM "WS_Export"
+#                 WHERE "part_no" = %s AND "deleted" = FALSE
+#             """, (row[4],))
+#             total_export = cursor2.fetchone()[0]
+#             cursor2.close()
+#             # --- Tính tồn kho ---
+#             stock_quantity = total_import - total_export
+
+#             item = {
+#                 "id": row[0],
+#                 "product_name": row[1],
+#                 "description": row[2],
+#                 "time": row[3],
+#                 "part_no": row[4],
+#                 "origin": row[5],
+#                 "unit": row[6],
+#                 "quantity_import": total_import,
+#                 "quantity_export": total_export,
+#                 "quantity_stock": row[7] + stock_quantity,
+#                 "seri_number": row[8],
+#                 "location": row[9],
+#                 "entered_by": row[10],
+#                 "status": row[11],
+#             }
+#             items.append(item)
+        
+#         # print(len(items))
+
+#         start_idx = (input.pagination - 1) * input.page_size
+#         end_idx = input.pagination * input.page_size
+#         items = items[start_idx:end_idx]
+#         # print(len(items))
+#         return {
+#             "status": "success",
+#             "data": items
+#         }
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "message": str(e)
+#         }
+#     finally:
+#         cursor.close()
 
 def WarehouseStatistical_View_function(input, conn):
     try:
-        cursor = conn.cursor()
+        # print(input)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         query = """ 
-            SELECT * FROM "WS_Statistical" 
+            SELECT 
+                i.*, 
+                s."product_name", 
+                s."description", 
+                s."origin", 
+                s."entered_by", 
+                s."unit", 
+                s."location",
+                COALESCE(e."quantity", 0) AS quantity_export
+            FROM "WS_Import" i
+            LEFT JOIN "WS_Statistical" s
+                ON i."statistical_id" = s."id"
+            LEFT JOIN "WS_Export" e 
+                ON i."seri_number" = e."seri_number" AND e."deleted" = FALSE
+            WHERE i."deleted" = FALSE
         """
-        cursor.execute(query)
+        params = []
+
+        if input.filter.part_no:
+            query += " AND i.\"part_no\" ILIKE %s"
+            params.append(f"%{input.filter.part_no}%")
+
+        if input.filter.origin:
+            query += " AND s.\"origin\" ILIKE %s"
+            params.append(f"%{input.filter.origin}%")
+
+        if input.filter.seri_number:
+            query += " AND i.\"seri_number\" ILIKE %s"
+            params.append(f"%{input.filter.seri_number}%")
+
+        if input.filter.project_code:
+            query += " AND i.\"project_code\" ILIKE %s"
+            params.append(f"%{input.filter.project_code}%")
+
+        if input.filter.datetime_import:
+            # Giả sử input.filter.datetime_import là chuỗi "2025-10-17"
+            import_date = input.filter.datetime_import.date()
+            query += " AND i.\"time\"::date = %s::date"
+            params.append(import_date)
+
+        else:
+            query += " ORDER BY i.\"time\" DESC LIMIT 1000"
+
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         items = []
         for row in rows:
             item = {
-                "id": row[0],
-                "product_name": row[1],
-                "description": row[2],
-                "time": row[3],
-                "part_no": row[4],
-                "origin": row[5],
-                "unit": row[6],
-                "quantity": row[7],
-                "seri_number": row[8],
-                "location": row[9],
-                "entered_by": row[10],
-                "status": row[11]
+                "id": row.get("id", None),
+                "product_name": row.get("product_name", ""),
+                "description": row.get("description", ""),
+                "time": row.get("time", ""),
+                "project_code": row.get("project_code", ""),
+                "part_no": row.get("part_no", ""),
+                "origin": row.get("origin", ""),
+                "unit": row.get("unit", ""),
+                "quantity_import": row.get("quantity", ""),
+                "quantity_export": row.get("quantity_export", ""),
+                "quantity_stock": row.get("quantity", "") - row.get("quantity_export", ""),
+                "seri_number": row.get("seri_number", ""),
+                "location": row.get("location", ""),
+                "entered_by": row.get("entered_by", ""),
+                "status": row.get("status", 0),
+                "manufacturing_date": row.get("manufacturing_date", None)
             }
             items.append(item)
+        
+        # print(len(items))
+
+        start_idx = (input.pagination - 1) * input.page_size
+        end_idx = input.pagination * input.page_size
+        items = items[start_idx:end_idx]
+        # print(len(items))
         return {
             "status": "success",
             "data": items
@@ -191,18 +332,18 @@ def WarehouseStatistical_DML_Delete_function(input, conn):
 def WarehouseStatistical_Upload_function(conn, file):
     try:
         filename = file.filename
-        ext = os.path.splitext(filename)[1].lower()
+        ext = os.path.splitext(filename)[-1].lower()
 
         # Đọc file Excel/CSV
         if ext == ".xlsx":
-            df = pd.read_excel(file.file, engine="openpyxl", header=1) 
+            df = pd.read_excel(file.file, engine="openpyxl", header=0) 
         elif ext == ".xls":
-            df = pd.read_excel(file.file, engine="xlrd", header=1)
+            df = pd.read_excel(file.file, engine="xlrd", header=0)
         elif ext == ".csv":
             try:
-                df = pd.read_csv(file.file, encoding="utf-8", header=1)
+                df = pd.read_csv(file.file, encoding="utf-8", header=0)
             except UnicodeDecodeError:
-                df = pd.read_csv(file.file, encoding="latin1", header=1)
+                df = pd.read_csv(file.file, encoding="latin1", header=0)
         else:
             return {"status": "error", "message": "Định dạng file không được hỗ trợ"}
 
@@ -211,45 +352,56 @@ def WarehouseStatistical_Upload_function(conn, file):
 
         # Map lại cột Excel -> DB (tuỳ thuộc file Excel của bạn)
         df = df.rename(columns={
-            "Descripton": "description",
-            "Part No.": "part_no",
-            "Origin": "origin",
-            "Unit": "unit",
-            "Qty": "quantity",
-            "Seri number": "seri_number"
+            "Tên sản phẩm": "product_name",
+            "Thông tin sản phẩm": "description",
+            "Ngày tạo": "time",
+            "Mã sản phẩm": "part_no",
+            "Nhà sản xuất": "origin",
+            "Đơn vị": "unit",
+            "Seri sản phẩm": "seri_number",
+            "Người tạo": "entered_by"
         })
 
         # Thêm cột auto
-        if "time" in df.columns:
-            df["time"] = pd.to_datetime(df["time"], dayfirst=True, errors="coerce")
-            df["time"] = df["time"].where(df["time"].notnull(), None)
-        else:
-            df["time"] = datetime.now()
+        # if "time" in df.columns:
+        #     df["time"] = pd.to_datetime(df["time"], dayfirst=True, errors="coerce")
+        #     df["time"] = df["time"].where(df["time"].notnull(), None)
+        # else:
+        #     df["time"] = datetime.now()
 
-        df["status"] = 0
+        df["quantity"] = 1
+        df["location"] = None
+        df["status"] = 1
+        df["manufacturing_date"] = None
+        df["time"] = pd.to_datetime(df["time"], format="%d/%m/%Y", errors="coerce")
+        df["time"] = df["time"].ffill()
 
+        print(df["time"])
+        print(df["time"].head().apply(lambda x: type(x)))
+        print(df["time"].tail().apply(lambda x: type(x)))
+    
         # Insert vào DB
-        cursor = conn.cursor()
-        for _, row in df.iterrows():
-            cursor.execute("""
-                INSERT INTO "WS_Statistical"
-                (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                row.get("product_name"),
-                row.get("description"),
-                row.get("time"),
-                row.get("part_no"),
-                row.get("origin"),
-                row.get("unit"),
-                row.get("quantity"),
-                row.get("seri_number"),
-                row.get("location"),
-                row.get("entered_by"),
-                row.get("status")
-            ))
-
-        conn.commit()
+        with conn.cursor() as cursor:
+            for _, row in df.iterrows():
+                cursor.execute("""
+                    INSERT INTO "WS_Statistical"
+                    (product_name, description, time, part_no, origin, unit, quantity, seri_number, location, entered_by, status, manufacturing_date)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    row["product_name"],
+                    row["description"],
+                    row["time"],
+                    row["part_no"],
+                    row["origin"],
+                    row["unit"],
+                    row["quantity"],
+                    row["seri_number"],
+                    row["location"],
+                    row["entered_by"],
+                    row["status"],
+                    row["manufacturing_date"]
+                ))
+            conn.commit()
 
         return {
             "status": "success",
@@ -261,8 +413,8 @@ def WarehouseStatistical_Upload_function(conn, file):
             "status": "error", 
             "message": str(e)
         }
-    finally:
-        cursor.close()
+    # finally:
+    #     cursor.close()
 
 def WarehouseStatistical_Upload_By_ImportExport_function(conn, file):
     try:
@@ -345,7 +497,12 @@ def WarehouseImportExport_View_function(conn, table_name: str):
                 "message": f"Bảng '{table_name}' không được phép truy cập."
             }
 
-        query = f'SELECT * FROM "{table_name}"'
+        query = f'''
+            SELECT * 
+            FROM "{table_name}" 
+            WHERE "deleted" = FALSE
+            ORDER BY "import_time" DESC
+            '''
         cursor.execute(query)
         rows = cursor.fetchall()
 
@@ -383,7 +540,9 @@ def WarehouseImportExport_View_Detail_function(input, conn, table_name: str):
         cursor = conn.cursor()
 
         query = sql.SQL("""
-            SELECT * FROM {table} WHERE id = %s
+            SELECT * 
+            FROM {table} 
+            WHERE id = %s AND "deleted" = FALSE
         """).format(table=sql.Identifier(table_name))
         cursor.execute(query, (input.id,))
         row = cursor.fetchone()
@@ -485,13 +644,13 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
         if option == "import":
             table_name = "WS_Import"
             id_field = "import_id"
-            id_value = input.form.ticket_id
+            id_value = str(input.form.ticket_id)
             time_field = "import_time"
             time_value = input.form.ticket_time if input.form.ticket_time else None
         elif option == "export":
             table_name = "WS_Export"
             id_field = "export_id"
-            id_value = input.form.ticket_id
+            id_value = str(input.form.ticket_id)
             time_field = "export_time"
             time_value = input.form.ticket_time if input.form.ticket_time else None
         else:
@@ -499,7 +658,7 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
                 "status": "error", 
                 "message": "Option không hợp lệ. Chỉ hỗ trợ 'import' hoặc 'export'."
                 }
-
+        print("ticket_id:", id_value)
         query = sql.SQL("""
             UPDATE {table}
             SET 
@@ -520,7 +679,7 @@ def WarehouseImportExport_DML_Update_function(input, conn, option):
         )
 
         cursor.execute(query, (
-            id_value,
+            str(id_value),
             input.form.time,
             time_value,
             input.form.project_code,
@@ -569,7 +728,10 @@ def WarehouseImportExport_DML_Delete_function(input, conn, option):
                 }
 
         query = sql.SQL("""
-            DELETE FROM {table} WHERE id = %s
+            UPDATE {table} 
+            SET
+                "deleted" = TRUE
+            WHERE "id" = %s
         """).format(
             table=sql.Identifier(table_name)
         )
@@ -606,13 +768,10 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
         elif ext == ".xls":
             df = pd.read_excel(file.file, engine="xlrd", header=1)
         elif ext == ".csv":
-            try:
-                df = pd.read_csv(file.file, encoding="utf-8", header=1)
-            except UnicodeDecodeError:
-                df = pd.read_csv(file.file, encoding="latin1", header=1)
+            df = pd.read_csv(file.file, encoding="latin1", header=1)
         else:
             return {"status": "error", "message": "Định dạng file không được hỗ trợ."}
-
+        print(df)
         df = df.replace({np.nan: None})
         df = df.where(pd.notnull(df), None)
 
@@ -651,37 +810,49 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
             time_col = "export_time"
         else:
             return {"status": "error", "message": f"Tùy chọn '{option}' không hợp lệ."}
+        
+        # Nhân bản theo số lượng bảng ghi
+        if option == "export":
+            expanded_rows = []
+            for _, row in df.iterrows():
+                qty = int(row["quantity"]) if row["quantity"] else 1
+                for _ in range(qty):
+                    new_row = row.copy()
+                    new_row["quantity"] = 1
+                    expanded_rows.append(new_row)
+            df = pd.DataFrame(expanded_rows)
+            df = df.set_index("STT")
+            df = df.reset_index(drop=True)
+        print("df:", df.columns)
+
 
         datetime_columns = ["time", time_col]
         for col in datetime_columns:
             if col in df.columns:
                 df[col] = df[col].replace({pd.NaT: None})
+        
+        print("df:", df)
 
         cursor = conn.cursor()
-        for _, row in df.iterrows():
-            time_value = row.get("time")
-            time_col_value = row.get(time_col)
-            
-            if time_col not in df.columns and time_col_value is None:
-                time_col_value = now
-            
+        insert_query = f"""
+            INSERT INTO "{table_name}"
+            ({id_col}, "time", {time_col}, "project_code", "product_name", "part_no", "origin", "quantity", "seri_number")
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+        for _, row in df.iterrows():       
             values = (
                 row.get(id_col),  
-                time_value,         
-                time_col_value,   
+                row.get("time"),         
+                datetime.now(),   
                 row.get("project_code"),
                 row.get("product_name"), 
                 row.get("part_no"),
                 row.get("origin"),
                 row.get("quantity"),
-                row.get("seri_number")
+                row.get("seri_number"),
             )
-            
-            cursor.execute(f"""
-                INSERT INTO "{table_name}"
-                ({id_col}, time, {time_col}, project_code, product_name, part_no, origin, quantity, seri_number)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, values)
+            print("values:", values)
+            cursor.execute(insert_query, values)
 
         conn.commit()
         return {"status": "success", "message": f"Tải dữ liệu {option} thành công."}
@@ -722,25 +893,56 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
         cursor = conn.cursor()
         # --- Chọn bảng phù hợp ---
         if input.option == "import":
-            query = '''
-                SELECT * FROM "WS_Import"
-                WHERE "import_id" = %s
-            '''
+            if input.ticket_id:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "import_id" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id,))
+            elif input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "project_code" = %s 
+                '''
+                cursor.execute(query, (input.project_code,))
+
+            elif input.ticket_id and input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE "import_id" = %s 
+                    AND "project_code" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id, input.project_code))
             object_prefix = "Import"
         elif input.option == "export":
-            query = '''
-                SELECT * FROM "WS_Export"
-                WHERE "export_id" = %s
-            '''
+            if input.ticket_id:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "export_id" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id,))
+            elif input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "project_code" = %s 
+                '''
+                cursor.execute(query, (input.project_code))
+            elif input.ticket_id and input.project_code:
+                query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE "export_id" = %s 
+                    AND "project_code" = %s 
+                '''
+                cursor.execute(query, (input.ticket_id, input.project_code))
             object_prefix = "Export"
         else:
             raise ValueError("Invalid option. Must be 'import' or 'export'.")
 
         # --- Lấy dữ liệu ---
-        cursor.execute(query, (input.ticket_id,))
         data = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(data, columns=columns)
+        print("df:",df)
         columns_file = ["STT", "Thời gian", "Mã Dự án", "Tên hàng", "Mã hàng", "Hãng", "Số lượng", "Seri No."]
         df["STT"] = range(1, len(df) + 1)
         df["Thời gian"] = df["time"]
@@ -752,8 +954,11 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
         df["Seri No."] = df["seri_number"]
         df = df[columns_file]
         # --- Ghi ra file tạm ---
-        filename = f"{object_prefix}_{input.ticket_id}.xlsx"
-        path_file = f"../minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
+        if input.ticket_id:
+            filename = f"{object_prefix}_{input.ticket_id}.xlsx"
+        elif input.project_code:
+            filename = f"{object_prefix}_{input.project_code}.xlsx"
+        path_file = f"./minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
         os.makedirs(os.path.dirname(path_file), exist_ok=True)
         with pd.ExcelWriter(path_file, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name="Sheet1", startrow=1)
@@ -799,7 +1004,7 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
                 object_name,
                 file_data,
                 length=file_stat.st_size,
-                content_type="text/csv"
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         # --- Xóa file local sau khi upload ---
@@ -827,3 +1032,321 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
     finally:
         if cursor:
             cursor.close()
+
+# ------------------------
+# Warehouse_Installation
+# ------------------------
+def WarehouseInstallation_Upload_function(conn, owner, file):
+    try:
+        filename = file.filename.rsplit('.', 1)[0]
+        project_code = filename.split('-')[:2]
+        project_code = '-'.join(project_code)
+
+        cursor = conn.cursor()
+        contents = file.file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        for _, row in df.iterrows():
+            serial_number = row.get("SERIAL NUMBER")
+            # Nếu serial_number là NaN hoặc chuỗi rỗng, chuyển thành None
+            if pd.isna(serial_number) or serial_number == "":
+                serial_number = None
+
+            query = """
+                INSERT INTO "WS_Installation" (
+                    "id",
+                    "higher_lever_function",
+                    "location",      
+                    "dt",
+                    "quantity",            
+                    "description",                      
+                    "part_no",               
+                    "seri_number",
+                    "manufacturer",
+                    "project_code"
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (
+                row.get("NO."),
+                row.get("HIGHER LEVEL FUNCTION"),
+                row.get("LOCATION"),
+                row.get("DT"),
+                row.get("QUANTITY"),
+                row.get("DESCRIPTION 1"),
+                row.get("ORDER NUMBER"),
+                serial_number,
+                row.get("MANUFACTURER"),
+                project_code
+            ))
+
+        conn.commit()
+        cursor.close()
+
+        return {
+            "status": "success",
+            "message": f"Tải lên thành công {len(df)} dòng dữ liệu."
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+def WarehouseInstallation_Download_function(conn, input, minio_client: Minio, MINIO_BUCKET: str):
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        query = '''
+            SELECT * FROM "WS_Installation"
+            WHERE 1=1
+        '''
+        params = []
+        if input.project_code:
+            query += ' AND "project_code" = %s '
+            params.append(input.project_code)
+        if input.cabinet_no:
+            query += ' AND "cabinet_no" = %s '
+            params.append(input.cabinet_no)
+
+        cursor.execute(query, params)
+        data = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(data, columns=columns)
+
+        columns_file = [
+            "NO.", "HIGHER LEVEL FUNCTION", "LOCATION", "DT", "QUANTITY",
+            "DESCRIPTION 1", "ORDER NUMBER", "SERIAL NUMBER", "MANUFACTURER"
+        ]
+        df["NO."] = df["id"]
+        df["HIGHER LEVEL FUNCTION"] = df["higher_lever_function"].apply(
+            lambda x: f"'{x}" if isinstance(x, str) and x.startswith('=') else x
+        )
+        df["LOCATION"] = df["location"]
+        df["DT"] = df["dt"]
+        df["QUANTITY"] = df["quantity"]
+        df["DESCRIPTION 1"] = df["description"]
+        df["ORDER NUMBER"] = df["part_no"]
+        df["SERIAL NUMBER"] = df["seri_number"]
+        df["MANUFACTURER"] = df["manufacturer"]
+        if not input.project_code:
+            input.project_code = df["project_code"].iloc[0]
+        if not input.cabinet_no:
+            input.cabinet_no = df["cabinet_no"].iloc[0]
+
+        # --- Tạo file Excel ---
+        path_file = f"./minio/minio_data/Workshop/Warehouse/Installation/{input.project_code}-PARTLIST-{input.cabinet_no}.xlsx"
+        df = df[columns_file]
+        df.to_excel(path_file, index=False)
+
+        # --- Tạo workbook ---
+        workbook = openpyxl.load_workbook(path_file)
+        worksheet = workbook.active
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                             top=Side(style='thin'), bottom=Side(style='thin'))
+        for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row,
+                                       min_col=1, max_col=worksheet.max_column):
+            for cell in row:
+                cell.border = thin_border
+                if isinstance(cell.value, str) and "\n" in cell.value:
+                    cell.alignment = Alignment(wrapText=True, vertical="top")
+        workbook.save(path_file)
+        # --- Upload lên MinIO ---
+        object_name = f"data/Workshop/Warehouse/Installation/{input.project_code}-PARTLIST-{input.cabinet_no}.xlsx"
+        with open(path_file, "rb") as file_data:
+            file_stat = os.stat(path_file)
+            minio_client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                file_data,
+                length=file_stat.st_size,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        # --- Xóa file local sau khi upload ---
+        os.remove(path_file)
+        # --- Tạo URL tải file ---
+        url = minio_client.presigned_get_object(
+            MINIO_BUCKET,
+            object_name,
+            expires=timedelta(hours=1)
+        )
+        return {
+            "status": "success",
+            "url": url
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+def WarehouseStatistical_Dashboard_function(conn, input):
+    try:
+        list_data = {}
+        chart_data = {}
+        cursor = conn.cursor()
+        ### ---------------------------------------------------------------------------------------- 
+        ### Point data ###
+        ### ----------------------------------------------------------------------------------------
+        # Tổng số lượng hàng hóa
+        query_total_product = '''
+            SELECT 
+                COUNT(DISTINCT "id") AS total_product
+            FROM "WS_Import"
+        '''
+        cursor.execute(query_total_product)
+        total_product = cursor.fetchone()
+        # Tổng số lượng nhập trong ngày
+        query_import_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS import_by_date
+            FROM "WS_Import"
+            WHERE DATE("import_time") <= %s AND DATE("import_time") >= %s 
+        '''
+        cursor.execute(query_import_by_date, (input.filter.datetime_end, input.filter.datetime_start))
+        import_by_date = cursor.fetchone()
+        # Tổng số lượng xuất trong ngày
+        query_export_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS export_by_date
+            FROM "WS_Export"
+            WHERE DATE("export_time") <= %s AND DATE("export_time") >= %s 
+        '''
+        cursor.execute(query_export_by_date, (input.filter.datetime_end, input.filter.datetime_start))
+        export_by_date = cursor.fetchone()
+
+        # Tổng số lượng chưa lắp đặt trong ngày
+        query_not_installation_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS installation_by_date
+            FROM "WS_Installation"
+            WHERE "seri_number" IS NULL
+        '''
+        cursor.execute(query_not_installation_by_date)
+        not_installation_by_date = cursor.fetchone()
+
+        # Tổng số PO
+        query_total_PO = '''
+            SELECT
+                COUNT(DISTINCT "import_id") AS total_PO,
+                COUNT(DISTINCT "project_code") AS total_project
+            FROM "WS_Import"
+        '''
+        cursor.execute(query_total_PO)
+        row = cursor.fetchone()
+        total_PO = row[0]
+        total_project = row[1]
+
+        point_data = {
+            "total_product": total_product[0],
+            "import_by_date": import_by_date[0],
+            "export_by_date": export_by_date[0],
+            "not_installation_by_date": not_installation_by_date[0],
+            "total_PO": total_PO,
+            "total_project": total_project
+        }
+
+        ### ---------------------------------------------------------------------------------------- 
+        ### List data ###
+        ### ----------------------------------------------------------------------------------------
+        # List nhập hàng theo dự án
+        query_list_import = '''
+            SELECT
+                "project_code",
+                SUM("quantity") AS total_quantity
+            FROM "WS_Import"
+            WHERE DATE("import_time") BETWEEN %s AND %s
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_import, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["import"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        # List xuất hàng theo dự án
+        query_list_export = '''
+            SELECT
+                "project_code",
+                SUM("quantity") AS total_quantity
+            FROM "WS_Export"
+            WHERE DATE("export_time") BETWEEN %s AND %s
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_export, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["export"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        # List lắp đặt theo dự án
+        query_list_installation = '''
+            SELECT
+                "project_code",
+                COUNT(DISTINCT "id") AS total_quantity
+            FROM "WS_Installation"
+            WHERE "seri_number" IS NOT NULL
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_installation, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["installation"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        ### ----------------------------------------------------------------------------------------
+        ### Chart data ###
+        ### ----------------------------------------------------------------------------------------
+        # Chart tròn nhập xuất hàng theo ngày
+        chart_data['pie_chart'] = {
+            "import_quantity": import_by_date[0],
+            "export_quantity": export_by_date[0]
+        }
+
+        list_range = ['day', 'week', 'month', 'quarter', 'year']
+        format_map = {
+            'day': 'YYYY-MM-DD',
+            'week': 'IYYY-"W"IW',
+            'month': 'YYYY-MM',
+            'quarter': 'YYYY-"Q"Q',
+            'year': 'YYYY'
+        }
+        chart_data['bar_chart'] = {}
+        for range_type in list_range:
+            date_format = format_map[range_type]
+            query_import_export_by_date = f'''
+                SELECT
+                    TO_CHAR(DATE_TRUNC('{range_type}', t.time), '{date_format}') AS period,
+                    SUM(CASE WHEN t.type = 'import' THEN t.quantity ELSE 0 END) AS total_import,
+                    SUM(CASE WHEN t.type = 'export' THEN t.quantity ELSE 0 END) AS total_export
+                FROM (
+                    SELECT "import_time" AS time, "quantity", 'import' AS type FROM "WS_Import"
+                    UNION ALL
+                    SELECT "export_time" AS time, "quantity", 'export' AS type FROM "WS_Export"
+                ) t
+                GROUP BY TO_CHAR(DATE_TRUNC('{range_type}', t.time), '{date_format}')
+                ORDER BY period;
+            '''
+            cursor.execute(query_import_export_by_date)
+            rows = cursor.fetchall()
+            chart_data['bar_chart'][range_type] = {
+                "datetime_data": [row[0] for row in rows],
+                "import_data": [row[1] for row in rows],
+                "export_data": [row[2] for row in rows],
+            }
+        
+        return {
+            "status": "success",
+            "point": point_data,
+            "list": list_data,
+            "chart": chart_data
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()

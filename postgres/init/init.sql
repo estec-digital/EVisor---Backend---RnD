@@ -43,9 +43,9 @@ CREATE TABLE IF NOT EXISTS "WorkManagement" (
 
 CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "id" SERIAL PRIMARY KEY,  
-    "product_name" VARCHAR(255),
-    "description" VARCHAR(255),
-    "time" timestamp,
+    "product_name" TEXT,
+    "description" TEXT,
+    "time" TIMESTAMP,
     "part_no" VARCHAR(255),
     "origin" VARCHAR(255),
     "entered_by" VARCHAR(255),
@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS "WS_Statistical" (
     "quantity" INTEGER,
     "seri_number" VARCHAR(255),
     "location" VARCHAR(255),
-    "status" INTEGER DEFAULT 0
+    "status" INTEGER DEFAULT 0,
+    "manufacturing_date" TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS "WS_Import" (
@@ -68,7 +69,9 @@ CREATE TABLE IF NOT EXISTS "WS_Import" (
     "part_no" VARCHAR(255),               
     "origin" VARCHAR(255),                  
     "quantity" INTEGER,                     
-    "seri_number" VARCHAR(255)
+    "seri_number" VARCHAR(255),
+    "deleted" BOOLEAN DEFAULT FALSE,
+    "statistical_id" INTEGER REFERENCES "WS_Statistical"("id") ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS "WS_Export" (
@@ -81,5 +84,20 @@ CREATE TABLE IF NOT EXISTS "WS_Export" (
     "part_no" VARCHAR(255),               
     "origin" VARCHAR(255),                  
     "quantity" INTEGER,                     
-    "seri_number" VARCHAR(255)
+    "seri_number" VARCHAR(255),
+    "cabinet" VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS "WS_Installation" (
+    "id" SERIAL PRIMARY KEY,
+    "higher_lever_function" VARCHAR(255),
+    "location" VARCHAR(255),      
+    "dt" VARCHAR(255),
+    "quantity" VARCHAR(255),            
+    "description" VARCHAR(255),                      
+    "part_no" VARCHAR(255),               
+    "seri_number" VARCHAR(255) NULL,
+    "manufacturer" VARCHAR(255),
+    "project_code" VARCHAR(255),
+    "cabinet_no" VARCHAR(255) NULL,
 );
