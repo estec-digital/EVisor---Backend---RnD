@@ -330,6 +330,7 @@ def WarehouseStatistical_DML_Delete_function(input, conn):
         cursor.close()
 
 def WarehouseStatistical_Upload_function(conn, file):
+    cursor = None
     try:
         filename = file.filename
         ext = os.path.splitext(filename)[-1].lower()
@@ -413,10 +414,11 @@ def WarehouseStatistical_Upload_function(conn, file):
             "status": "error", 
             "message": str(e)
         }
-    # finally:
-    #     cursor.close()
+    finally:
+        cursor.close()
 
 def WarehouseStatistical_Upload_By_ImportExport_function(conn, file):
+    cursor = None
     try:
         filename = file.filename
         ext = os.path.splitext(filename)[1].lower()
@@ -483,7 +485,8 @@ def WarehouseStatistical_Upload_By_ImportExport_function(conn, file):
             "message": str(e)
         }
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 ### Warehouse - Import, Export ###
 
