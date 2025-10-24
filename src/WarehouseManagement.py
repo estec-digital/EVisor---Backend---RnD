@@ -6,6 +6,8 @@ from psycopg2 import sql
 from minio import Minio
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from psycopg2.extras import RealDictCursor
+import io
+import openpyxl
 
 # def WarehouseStatistical_View_function(input, conn):
 #     try:
@@ -130,6 +132,12 @@ def WarehouseStatistical_View_function(input, conn):
         if input.filter.project_code:
             query += " AND i.\"project_code\" ILIKE %s"
             params.append(f"%{input.filter.project_code}%")
+
+        if input.filter.datetime_import:
+            # Giả sử input.filter.datetime_import là chuỗi "2025-10-17"
+            import_date = input.filter.datetime_import.date()
+            query += " AND i.\"time\"::date = %s::date"
+            params.append(import_date)
 
         else:
             query += " ORDER BY i.\"time\" DESC LIMIT 1000"
@@ -936,3 +944,321 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
     finally:
         if cursor:
             cursor.close()
+
+# ------------------------
+# Warehouse_Installation
+# ------------------------
+def WarehouseInstallation_Upload_function(conn, owner, file):
+    try:
+        filename = file.filename.rsplit('.', 1)[0]
+        project_code = filename.split('-')[:2]
+        project_code = '-'.join(project_code)
+
+        cursor = conn.cursor()
+        contents = file.file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        for _, row in df.iterrows():
+            serial_number = row.get("SERIAL NUMBER")
+            # Nếu serial_number là NaN hoặc chuỗi rỗng, chuyển thành None
+            if pd.isna(serial_number) or serial_number == "":
+                serial_number = None
+
+            query = """
+                INSERT INTO "WS_Installation" (
+                    "id",
+                    "higher_lever_function",
+                    "location",      
+                    "dt",
+                    "quantity",            
+                    "description",                      
+                    "part_no",               
+                    "seri_number",
+                    "manufacturer",
+                    "project_code"
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (
+                row.get("NO."),
+                row.get("HIGHER LEVEL FUNCTION"),
+                row.get("LOCATION"),
+                row.get("DT"),
+                row.get("QUANTITY"),
+                row.get("DESCRIPTION 1"),
+                row.get("ORDER NUMBER"),
+                serial_number,
+                row.get("MANUFACTURER"),
+                project_code
+            ))
+
+        conn.commit()
+        cursor.close()
+
+        return {
+            "status": "success",
+            "message": f"Tải lên thành công {len(df)} dòng dữ liệu."
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+def WarehouseInstallation_Download_function(conn, input, minio_client: Minio, MINIO_BUCKET: str):
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        query = '''
+            SELECT * FROM "WS_Installation"
+            WHERE 1=1
+        '''
+        params = []
+        if input.project_code:
+            query += ' AND "project_code" = %s '
+            params.append(input.project_code)
+        if input.cabinet_no:
+            query += ' AND "cabinet_no" = %s '
+            params.append(input.cabinet_no)
+
+        cursor.execute(query, params)
+        data = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(data, columns=columns)
+
+        columns_file = [
+            "NO.", "HIGHER LEVEL FUNCTION", "LOCATION", "DT", "QUANTITY",
+            "DESCRIPTION 1", "ORDER NUMBER", "SERIAL NUMBER", "MANUFACTURER"
+        ]
+        df["NO."] = df["id"]
+        df["HIGHER LEVEL FUNCTION"] = df["higher_lever_function"].apply(
+            lambda x: f"'{x}" if isinstance(x, str) and x.startswith('=') else x
+        )
+        df["LOCATION"] = df["location"]
+        df["DT"] = df["dt"]
+        df["QUANTITY"] = df["quantity"]
+        df["DESCRIPTION 1"] = df["description"]
+        df["ORDER NUMBER"] = df["part_no"]
+        df["SERIAL NUMBER"] = df["seri_number"]
+        df["MANUFACTURER"] = df["manufacturer"]
+        if not input.project_code:
+            input.project_code = df["project_code"].iloc[0]
+        if not input.cabinet_no:
+            input.cabinet_no = df["cabinet_no"].iloc[0]
+
+        # --- Tạo file Excel ---
+        path_file = f"./minio/minio_data/Workshop/Warehouse/Installation/{input.project_code}-PARTLIST-{input.cabinet_no}.xlsx"
+        df = df[columns_file]
+        df.to_excel(path_file, index=False)
+
+        # --- Tạo workbook ---
+        workbook = openpyxl.load_workbook(path_file)
+        worksheet = workbook.active
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                             top=Side(style='thin'), bottom=Side(style='thin'))
+        for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row,
+                                       min_col=1, max_col=worksheet.max_column):
+            for cell in row:
+                cell.border = thin_border
+                if isinstance(cell.value, str) and "\n" in cell.value:
+                    cell.alignment = Alignment(wrapText=True, vertical="top")
+        workbook.save(path_file)
+        # --- Upload lên MinIO ---
+        object_name = f"data/Workshop/Warehouse/Installation/{input.project_code}-PARTLIST-{input.cabinet_no}.xlsx"
+        with open(path_file, "rb") as file_data:
+            file_stat = os.stat(path_file)
+            minio_client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                file_data,
+                length=file_stat.st_size,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        # --- Xóa file local sau khi upload ---
+        os.remove(path_file)
+        # --- Tạo URL tải file ---
+        url = minio_client.presigned_get_object(
+            MINIO_BUCKET,
+            object_name,
+            expires=timedelta(hours=1)
+        )
+        return {
+            "status": "success",
+            "url": url
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+def WarehouseStatistical_Dashboard_function(conn, input):
+    try:
+        list_data = {}
+        chart_data = {}
+        cursor = conn.cursor()
+        ### ---------------------------------------------------------------------------------------- 
+        ### Point data ###
+        ### ----------------------------------------------------------------------------------------
+        # Tổng số lượng hàng hóa
+        query_total_product = '''
+            SELECT 
+                COUNT(DISTINCT "id") AS total_product
+            FROM "WS_Import"
+        '''
+        cursor.execute(query_total_product)
+        total_product = cursor.fetchone()
+        # Tổng số lượng nhập trong ngày
+        query_import_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS import_by_date
+            FROM "WS_Import"
+            WHERE DATE("import_time") <= %s AND DATE("import_time") >= %s 
+        '''
+        cursor.execute(query_import_by_date, (input.filter.datetime_end, input.filter.datetime_start))
+        import_by_date = cursor.fetchone()
+        # Tổng số lượng xuất trong ngày
+        query_export_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS export_by_date
+            FROM "WS_Export"
+            WHERE DATE("export_time") <= %s AND DATE("export_time") >= %s 
+        '''
+        cursor.execute(query_export_by_date, (input.filter.datetime_end, input.filter.datetime_start))
+        export_by_date = cursor.fetchone()
+
+        # Tổng số lượng chưa lắp đặt trong ngày
+        query_not_installation_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS installation_by_date
+            FROM "WS_Installation"
+            WHERE "seri_number" IS NULL
+        '''
+        cursor.execute(query_not_installation_by_date)
+        not_installation_by_date = cursor.fetchone()
+
+        # Tổng số PO
+        query_total_PO = '''
+            SELECT
+                COUNT(DISTINCT "import_id") AS total_PO,
+                COUNT(DISTINCT "project_code") AS total_project
+            FROM "WS_Import"
+        '''
+        cursor.execute(query_total_PO)
+        row = cursor.fetchone()
+        total_PO = row[0]
+        total_project = row[1]
+
+        point_data = {
+            "total_product": total_product[0],
+            "import_by_date": import_by_date[0],
+            "export_by_date": export_by_date[0],
+            "not_installation_by_date": not_installation_by_date[0],
+            "total_PO": total_PO,
+            "total_project": total_project
+        }
+
+        ### ---------------------------------------------------------------------------------------- 
+        ### List data ###
+        ### ----------------------------------------------------------------------------------------
+        # List nhập hàng theo dự án
+        query_list_import = '''
+            SELECT
+                "project_code",
+                SUM("quantity") AS total_quantity
+            FROM "WS_Import"
+            WHERE DATE("import_time") BETWEEN %s AND %s
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_import, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["import"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        # List xuất hàng theo dự án
+        query_list_export = '''
+            SELECT
+                "project_code",
+                SUM("quantity") AS total_quantity
+            FROM "WS_Export"
+            WHERE DATE("export_time") BETWEEN %s AND %s
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_export, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["export"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        # List lắp đặt theo dự án
+        query_list_installation = '''
+            SELECT
+                "project_code",
+                COUNT(DISTINCT "id") AS total_quantity
+            FROM "WS_Installation"
+            WHERE "seri_number" IS NOT NULL
+            GROUP BY "project_code"
+            ORDER BY "project_code";
+        '''
+        cursor.execute(query_list_installation, (input.filter.datetime_start, input.filter.datetime_end))
+        rows = cursor.fetchall()
+        list_data["installation"] = [
+            {"project_code": row[0], "total_quantity": row[1]} for row in rows
+        ]
+        ### ----------------------------------------------------------------------------------------
+        ### Chart data ###
+        ### ----------------------------------------------------------------------------------------
+        # Chart tròn nhập xuất hàng theo ngày
+        chart_data['pie_chart'] = {
+            "import_quantity": import_by_date[0],
+            "export_quantity": export_by_date[0]
+        }
+
+        list_range = ['day', 'week', 'month', 'quarter', 'year']
+        format_map = {
+            'day': 'YYYY-MM-DD',
+            'week': 'IYYY-"W"IW',
+            'month': 'YYYY-MM',
+            'quarter': 'YYYY-"Q"Q',
+            'year': 'YYYY'
+        }
+        chart_data['bar_chart'] = {}
+        for range_type in list_range:
+            date_format = format_map[range_type]
+            query_import_export_by_date = f'''
+                SELECT
+                    TO_CHAR(DATE_TRUNC('{range_type}', t.time), '{date_format}') AS period,
+                    SUM(CASE WHEN t.type = 'import' THEN t.quantity ELSE 0 END) AS total_import,
+                    SUM(CASE WHEN t.type = 'export' THEN t.quantity ELSE 0 END) AS total_export
+                FROM (
+                    SELECT "import_time" AS time, "quantity", 'import' AS type FROM "WS_Import"
+                    UNION ALL
+                    SELECT "export_time" AS time, "quantity", 'export' AS type FROM "WS_Export"
+                ) t
+                GROUP BY TO_CHAR(DATE_TRUNC('{range_type}', t.time), '{date_format}')
+                ORDER BY period;
+            '''
+            cursor.execute(query_import_export_by_date)
+            rows = cursor.fetchall()
+            chart_data['bar_chart'][range_type] = {
+                "datetime_data": [row[0] for row in rows],
+                "import_data": [row[1] for row in rows],
+                "export_data": [row[2] for row in rows],
+            }
+        
+        return {
+            "status": "success",
+            "point": point_data,
+            "list": list_data,
+            "chart": chart_data
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()

@@ -124,3 +124,76 @@ $BODY$;
 
 ALTER FUNCTION public.ws_import_upsert()
     OWNER TO evisor;
+
+
+-- FUNCTION: public.ws_export_before_insert()
+
+-- DROP FUNCTION IF EXISTS public.ws_export_before_insert();
+
+CREATE OR REPLACE FUNCTION public.ws_export_before_insert()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+DECLARE
+    existing_part_no_import text;
+    existing_product_name text;
+    existing_origin text;
+BEGIN
+    -- 1) Lấy part_no tương ứng với seri_number trong WS_Import (nếu có)
+    SELECT part_no
+    INTO existing_part_no_import
+    FROM "WS_Import"
+    WHERE seri_number = NEW.seri_number
+    LIMIT 1;
+
+    -- Nếu không tìm thấy part_no thì bỏ qua, trả NEW để UPDATE tiếp tục
+    IF existing_part_no_import IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- 2) Lấy thông tin product từ WS_Statistical theo part_no vừa tìm
+    SELECT product_name, origin
+    INTO existing_product_name, existing_origin
+    FROM "WS_Statistical"
+    WHERE part_no = existing_part_no_import
+    LIMIT 1;
+
+    -- 3) Nếu có dữ liệu ở WS_Statistical thì chèn 1 bản ghi vào WS_Export
+    IF existing_part_no_import IS NOT NULL THEN
+        WITH row_to_update AS (
+		    SELECT id
+		    FROM "WS_Installation"
+		    WHERE part_no = existing_part_no_import
+		      AND project_code = NEW.project_code
+		      AND seri_number IS NULL
+		    ORDER BY id
+		    LIMIT 1
+		)
+		UPDATE "WS_Installation"
+		SET seri_number = NEW.seri_number
+		WHERE id IN (SELECT id FROM row_to_update);
+
+        NEW.export_id := NULL;
+		NEW.time := NOW();
+		NEW.export_time := NOW();
+        IF existing_product_name IS NOT NULL THEN
+            NEW.product_name := existing_product_name;
+        END IF;
+		NEW.part_no := existing_part_no_import;
+		IF existing_origin IS NOT NULL THEN
+            NEW.origin := existing_origin;
+        END IF;
+		NEW.quantity := 1;
+		NEW.cabinet := NULL;
+		NEW.deleted := FALSE;
+        RETURN NEW;
+    END IF;
+
+    RETURN NEW;
+END;
+$BODY$;
+
+ALTER FUNCTION public.ws_export_before_insert()
+    OWNER TO evisor;
