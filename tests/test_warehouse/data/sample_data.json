@@ -1,0 +1,189 @@
+{
+  "warehouse_statistical_data": [
+    {
+      "id": 1,
+      "product_name": "Sản phẩm A",
+      "description": "Mô tả sản phẩm A",
+      "time": "2025-01-15T10:30:00",
+      "project_code": "PROJ-A",
+      "part_no": "PN001",
+      "origin": "Vietnam",
+      "unit": "Cái",
+      "quantity": 100,
+      "quantity_export": 20,
+      "seri_number": "SN001",
+      "location": "Kho A",
+      "entered_by": "user1",
+      "status": 1,
+      "manufacturing_date": "2024-12-01"
+    },
+    {
+      "id": 2,
+      "product_name": "Sản phẩm B",
+      "description": "Mô tả sản phẩm B",
+      "time": "2025-01-16T14:20:00",
+      "project_code": "PROJ-B",
+      "part_no": "PN002",
+      "origin": "China",
+      "unit": "Cái",
+      "quantity": 50,
+      "quantity_export": 10,
+      "seri_number": "SN002",
+      "location": "Kho B",
+      "entered_by": "user2",
+      "status": 1,
+      "manufacturing_date": "2024-12-02"
+    },
+    {
+      "id": 3,
+      "product_name": "Sản phẩm C",
+      "description": "Mô tả sản phẩm C",
+      "time": "2025-01-17T09:15:00",
+      "project_code": "PROJ-A",
+      "part_no": "PN003",
+      "origin": "Japan",
+      "unit": "Cái",
+      "quantity": 75,
+      "quantity_export": 0,
+      "seri_number": "SN003",
+      "location": "Kho C",
+      "entered_by": "user3",
+      "status": 0,
+      "manufacturing_date": "2024-12-03"
+    }
+  ],
+  "empty_data": [],
+  "large_dataset": [
+    {
+      "id": 1,
+      "product_name": "Product 1",
+      "description": "Description 1",
+      "time": "2025-01-01T10:00:00",
+      "project_code": "PROJ-1",
+      "part_no": "PART-001",
+      "origin": "VN",
+      "unit": "pcs",
+      "quantity": 10,
+      "quantity_export": 2,
+      "seri_number": "SERI-001",
+      "location": "Location 1",
+      "entered_by": "user1",
+      "status": 1,
+      "manufacturing_date": "2024-12-01"
+    }
+  ],
+  "dashboard_sample_data": {
+    "point_data": {
+      "total_product": 150,
+      "import_by_date": 25,
+      "export_by_date": 18,
+      "not_installation_by_date": 7,
+      "total_PO": 45,
+      "total_project": 12
+    },
+    "list_data": {
+      "import": [
+        {"project_code": "PROJ-A", "total_quantity": 100},
+        {"project_code": "PROJ-B", "total_quantity": 75},
+        {"project_code": "PROJ-C", "total_quantity": 50}
+      ],
+      "export": [
+        {"project_code": "PROJ-A", "total_quantity": 60},
+        {"project_code": "PROJ-B", "total_quantity": 40},
+        {"project_code": "PROJ-C", "total_quantity": 25}
+      ],
+      "installation": [
+        {"project_code": "PROJ-A", "total_quantity": 35},
+        {"project_code": "PROJ-B", "total_quantity": 20},
+        {"project_code": "PROJ-C", "total_quantity": 15}
+      ]
+    },
+    "chart_data": {
+      "pie_chart": {
+        "import_quantity": 225,
+        "export_quantity": 125
+      },
+      "bar_chart": {
+        "day": {
+          "datetime_data": ["2025-01-15", "2025-01-16", "2025-01-17"],
+          "import_data": [50, 75, 100],
+          "export_data": [25, 40, 60]
+        },
+        "week": {
+          "datetime_data": ["2025-W03", "2025-W04", "2025-W05"],
+          "import_data": [200, 300, 250],
+          "export_data": [100, 150, 120]
+        },
+        "month": {
+          "datetime_data": ["2025-01", "2025-02", "2025-03"],
+          "import_data": [1000, 1200, 900],
+          "export_data": [600, 700, 550]
+        },
+        "quarter": {
+          "datetime_data": ["2025-Q1", "2025-Q2", "2025-Q3"],
+          "import_data": [3000, 3500, 3200],
+          "export_data": [1800, 2100, 1900]
+        },
+        "year": {
+          "datetime_data": ["2024", "2025"],
+          "import_data": [12000, 15000],
+          "export_data": [8000, 10000]
+        }
+      }
+    }
+  },
+  "empty_dashboard_data": {
+    "point_data": {
+      "total_product": 0,
+      "import_by_date": 0,
+      "export_by_date": 0,
+      "not_installation_by_date": 0,
+      "total_PO": 0,
+      "total_project": 0
+    },
+    "list_data": {
+      "import": [],
+      "export": [],
+      "installation": []
+    },
+    "chart_data": {
+      "pie_chart": {
+        "import_quantity": 0,
+        "export_quantity": 0
+      },
+      "bar_chart": {
+        "day": {
+          "datetime_data": [],
+          "import_data": [],
+          "export_data": []
+        },
+        "week": {
+          "datetime_data": [],
+          "import_data": [],
+          "export_data": []
+        },
+        "month": {
+          "datetime_data": [],
+          "import_data": [],
+          "export_data": []
+        },
+        "quarter": {
+          "datetime_data": [],
+          "import_data": [],
+          "export_data": []
+        },
+        "year": {
+          "datetime_data": [],
+          "import_data": [],
+          "export_data": []
+        }
+      }
+    }
+  },
+  "warehouse_statistical_detail_data": {
+    "item_1": [1, "Sản phẩm A", "Mô tả chi tiết sản phẩm A", "2025-01-15T10:30:00", "PN001", "Vietnam", "Cái", 100, "SN001", "Kho A", "user1", 1],
+    "item_2": [2, "Sản phẩm B", "Mô tả chi tiết sản phẩm B", "2025-01-16T14:20:00", "PN002", "China", "Cái", 50, "SN002", "Kho B", "user2", 1],
+    "item_3": [3, "Sản phẩm C", "Mô tả chi tiết sản phẩm C", "2025-01-17T09:15:00", "PN003", "Japan", "Cái", 75, "SN003", "Kho C", "user3", 0],
+    "not_found": null
+  }
+}

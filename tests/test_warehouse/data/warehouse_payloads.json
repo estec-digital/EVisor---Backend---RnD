@@ -1,0 +1,353 @@
+{
+  "warehouse_statistical_view": {
+    "valid_payloads": [
+      {
+        "request_id": "evisor-1234567890",
+        "owner": "hoanvlh",
+        "filter": {
+          "part_no": null,
+          "origin": null,
+          "seri_number": null,
+          "project_code": null,
+          "datetime_import": null
+        },
+        "pagination": 1,
+        "page_size": 20
+      },
+      {
+        "request_id": "evisor-9876543210",
+        "owner": "user2",
+        "filter": {
+          "part_no": "PN001",
+          "origin": "Vietnam",
+          "seri_number": null,
+          "project_code": null,
+          "datetime_import": null
+        },
+        "pagination": 1,
+        "page_size": 10
+      },
+      {
+        "request_id": "evisor-1112223334",
+        "owner": "admin",
+        "filter": {
+          "part_no": null,
+          "origin": null,
+          "seri_number": "SN001",
+          "project_code": "PROJ-A",
+          "datetime_import": "2025-01-15T00:00:00"
+        },
+        "pagination": 2,
+        "page_size": 5
+      }
+    ],
+    "invalid_payloads": [
+      {
+        "name": "missing_required_fields",
+        "payload": {
+          "owner": "hoanvlh",
+          "filter": {}
+        }
+      },
+      {
+        "name": "invalid_pagination",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "filter": {},
+          "pagination": 0,
+          "page_size": -1
+        }
+      },
+      {
+        "name": "empty_owner",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "",
+          "filter": {},
+          "pagination": 1,
+          "page_size": 20
+        }
+      }
+    ],
+    "filter_test_cases": [
+      {
+        "name": "filter_by_part_no",
+        "payload": {
+          "request_id": "evisor-filter-001",
+          "owner": "hoanvlh",
+          "filter": {
+            "part_no": "PN001"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      },
+      {
+        "name": "filter_by_origin",
+        "payload": {
+          "request_id": "evisor-filter-002",
+          "owner": "hoanvlh",
+          "filter": {
+            "origin": "Vietnam"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      },
+      {
+        "name": "filter_by_seri_number",
+        "payload": {
+          "request_id": "evisor-filter-003",
+          "owner": "hoanvlh",
+          "filter": {
+            "seri_number": "SN001"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      },
+      {
+        "name": "filter_by_project_code",
+        "payload": {
+          "request_id": "evisor-filter-004",
+          "owner": "hoanvlh",
+          "filter": {
+            "project_code": "PROJ-A"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      },
+      {
+        "name": "filter_by_datetime",
+        "payload": {
+          "request_id": "evisor-filter-005",
+          "owner": "hoanvlh",
+          "filter": {
+            "datetime_import": "2025-01-15T00:00:00"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      },
+      {
+        "name": "combined_filters",
+        "payload": {
+          "request_id": "evisor-filter-006",
+          "owner": "hoanvlh",
+          "filter": {
+            "part_no": "PN001",
+            "origin": "Vietnam",
+            "project_code": "PROJ-A"
+          },
+          "pagination": 1,
+          "page_size": 20
+        }
+      }
+    ]
+  },
+  "warehouse_statistical_dashboard": {
+    "valid_payloads": [
+      {
+        "request_id": "evisor-1234567890",
+        "owner": "hoanvlh",
+        "filter": {
+          "datetime_start": "2025-01-01T00:00:00",
+          "datetime_end": "2025-01-31T23:59:59"
+        }
+      },
+      {
+        "request_id": "evisor-9876543210",
+        "owner": "user2",
+        "filter": {
+          "datetime_start": "2025-01-15T00:00:00",
+          "datetime_end": "2025-01-20T23:59:59"
+        }
+      },
+      {
+        "request_id": "evisor-1112223334",
+        "owner": "admin",
+        "filter": {
+          "datetime_start": "2024-12-01T00:00:00",
+          "datetime_end": "2025-01-31T23:59:59"
+        }
+      }
+    ],
+    "invalid_payloads": [
+      {
+        "name": "missing_datetime_range",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "filter": {}
+        }
+      },
+      {
+        "name": "invalid_datetime_format",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "filter": {
+            "datetime_start": "invalid-date",
+            "datetime_end": "invalid-date"
+          }
+        }
+      },
+      {
+        "name": "missing_required_fields",
+        "payload": {
+          "owner": "hoanvlh",
+          "filter": {
+            "datetime_start": "2025-01-01T00:00:00",
+            "datetime_end": "2025-01-31T23:59:59"
+          }
+        }
+      }
+    ],
+    "edge_case_payloads": [
+      {
+        "name": "same_start_end_date",
+        "payload": {
+          "request_id": "evisor-edge-001",
+          "owner": "hoanvlh",
+          "filter": {
+            "datetime_start": "2025-01-15T00:00:00",
+            "datetime_end": "2025-01-15T23:59:59"
+          }
+        }
+      },
+      {
+        "name": "large_date_range",
+        "payload": {
+          "request_id": "evisor-edge-002",
+          "owner": "hoanvlh",
+          "filter": {
+            "datetime_start": "2024-01-01T00:00:00",
+            "datetime_end": "2025-12-31T23:59:59"
+          }
+        }
+      }
+    ]
+  },
+  "warehouse_statistical_detail_view": {
+    "valid_payloads": [
+      {
+        "request_id": "evisor-1234567890",
+        "owner": "hoanvlh",
+        "id": 1
+      },
+      {
+        "request_id": "evisor-9876543210", 
+        "owner": "user2",
+        "id": 2
+      },
+      {
+        "request_id": "evisor-1112223334",
+        "owner": "admin",
+        "id": 3
+      }
+    ],
+    "invalid_payloads": [
+      {
+        "name": "missing_id",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh"
+        }
+      },
+      {
+        "name": "invalid_id_type",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "id": "not-a-number"
+        }
+      },
+      {
+        "name": "negative_id",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "id": -1
+        }
+      },
+      {
+        "name": "zero_id", 
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "id": 0
+        }
+      }
+    ],
+    "edge_case_payloads": [
+      {
+        "name": "non_existent_id",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh",
+          "id": 999999
+        }
+      },
+      {
+        "name": "very_large_id",
+        "payload": {
+          "request_id": "evisor-1234567890",
+          "owner": "hoanvlh", 
+          "id": 999999999
+        }
+      }
+    ]
+  },
+  "warehouse_statistical_upload": {
+  "valid_payloads": [
+    { "request_id": "evisor-1234567890", "owner": "hoanvlh", "file_name": "test.xlsx" }
+  ],
+  "invalid_payloads": [
+    { "name": "invalid_format", "file_name": "test.txt" },
+    { "name": "missing_file", "payload": { "owner": "hoanvlh" } }
+  ]
+},
+"warehouse_statistical_upload_by_importexport": {
+  "valid_payloads": [
+    { "request_id": "evisor-1234567890", "owner": "hoanvlh", "file_name": "import_export.xlsx" }
+  ],
+  "invalid_payloads": [
+    { "name": "invalid_format", "file_name": "test.txt" },
+    { "name": "missing_file", "payload": { "owner": "hoanvlh" } }
+  ]
+},
+"warehouse_importexport_view": {
+  "valid_payloads": [
+    { "request_id": "evisor-1234567890", "owner": "hoanvlh", "option": "import" },
+    { "request_id": "evisor-9876543210", "owner": "hoanvlh", "option": "export" }
+  ],
+  "invalid_payloads": [
+    { "name": "invalid_option", "payload": { "request_id": "evisor-1234567890", "owner": "hoanvlh", "option": "invalid" } }
+  ]
+},
+"warehouse_importexport_view_detail": {
+  "valid_payloads": [
+    { "request_id": "evisor-1234567890", "owner": "hoanvlh", "id": 1, "option": "import" },
+    { "request_id": "evisor-9876543210", "owner": "hoanvlh", "id": 2, "option": "export" }
+  ],
+  "invalid_payloads": [
+    { "name": "invalid_option", "payload": { "request_id": "evisor-1234567890", "owner": "hoanvlh", "id": 1, "option": "invalid_option" } },
+    { "name": "missing_id", "payload": { "request_id": "evisor-1234567890", "owner": "hoanvlh", "option": "import" } }
+  ],
+  "edge_case_payloads": [
+    { "name": "non_existent_id", "payload": { "request_id": "evisor-1234567890", "owner": "hoanvlh", "id": 999, "option": "import" } }
+  ]
+},
+"warehouse_importexport_upload": {
+  "valid_payloads": [
+    { "request_id": "evisor-1234567890", "owner": "hoanvlh", "option": "import", "file_name": "import_file.xlsx" },
+    { "request_id": "evisor-9876543210", "owner": "hoanvlh", "option": "export", "file_name": "export_file.xlsx" }
+  ],
+  "invalid_payloads": [
+    { "name": "invalid_option", "payload": { "request_id": "evisor-1234567890", "owner": "hoanvlh", "option": "invalid_option" } },
+    { "name": "invalid_format", "file_name": "test.txt" }
+  ]
+}
+}

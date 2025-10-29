@@ -415,7 +415,8 @@ def WarehouseStatistical_Upload_function(conn, file):
             "message": str(e)
         }
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
 
 def WarehouseStatistical_Upload_By_ImportExport_function(conn, file):
     cursor = None

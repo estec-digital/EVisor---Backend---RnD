@@ -1,0 +1,430 @@
+{
+  "test_suites": {
+    "warehouse_statistical_view_smoke": {
+      "description": "Basic functionality tests for Warehouse Statistical View",
+      "priority": "high",
+      "enabled": true
+    },
+    "warehouse_statistical_view_validation": {
+      "description": "Input validation tests",
+      "priority": "high",
+      "enabled": true
+    },
+    "warehouse_statistical_view_error": {
+      "description": "Error handling tests",
+      "priority": "medium",
+      "enabled": true
+    },
+    "warehouse_statistical_view_filter": {
+      "description": "Filter functionality tests",
+      "priority": "high",
+      "enabled": true
+    }
+  },
+  "warehouse_statistical_view_success_cases": [
+    {
+      "name": "success_basic_request",
+      "description": "Test API với request cơ bản",
+      "payload_key": "warehouse_statistical_view.valid_payloads[0]",
+      "data_key": "warehouse_statistical_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_length": 3,
+      "suite": "warehouse_statistical_view_smoke",
+      "tags": ["happy_path", "basic"]
+    },
+    {
+      "name": "success_with_filters",
+      "description": "Test API với filters",
+      "payload_key": "warehouse_statistical_view.valid_payloads[1]",
+      "data_key": "warehouse_statistical_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_length": 1,
+      "suite": "warehouse_statistical_view_filter",
+      "tags": ["filters", "happy_path"]
+    },
+    {
+      "name": "success_empty_result",
+      "description": "Test API khi không có dữ liệu",
+      "payload_key": "warehouse_statistical_view.valid_payloads[0]",
+      "data_key": "empty_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_length": 0,
+      "suite": "warehouse_statistical_view_smoke",
+      "tags": ["empty_data", "edge_case"]
+    }
+  ],
+  "warehouse_statistical_view_error_cases": [
+    {
+      "name": "error_invalid_session",
+      "description": "Test khi session không hợp lệ",
+      "payload_key": "warehouse_statistical_view.valid_payloads[0]",
+      "mock_session": false,
+      "expected_status": "error",
+      "expected_message_contains": "Phiên làm việc",
+      "suite": "warehouse_statistical_view_error",
+      "tags": ["authentication", "session"]
+    },
+    {
+      "name": "error_database_connection",
+      "description": "Test khi kết nối database lỗi",
+      "payload_key": "warehouse_statistical_view.valid_payloads[0]",
+      "mock_session": true,
+      "mock_connection_error": "Database connection timeout",
+      "expected_status": "error",
+      "expected_message_contains": "Database connection timeout",
+      "suite": "warehouse_statistical_view_error",
+      "tags": ["database", "connection"]
+    }
+  ],
+  "warehouse_statistical_view_filter_cases": [
+    {
+      "name": "filter_part_no",
+      "description": "Test filter theo part_no",
+      "payload_key": "warehouse_statistical_view.filter_test_cases[0]",
+      "data_key": "warehouse_statistical_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_length": 1,
+      "suite": "warehouse_statistical_view_filter",
+      "tags": ["filter", "part_no"]
+    },
+    {
+      "name": "filter_origin",
+      "description": "Test filter theo origin",
+      "payload_key": "warehouse_statistical_view.filter_test_cases[1]",
+      "data_key": "warehouse_statistical_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_length": 1,
+      "suite": "warehouse_statistical_view_filter",
+      "tags": ["filter", "origin"]
+    }
+  ],
+  "warehouse_statistical_dashboard_success_cases": [
+    {
+      "name": "dashboard_success_basic",
+      "description": "Test Dashboard API với date range cơ bản",
+      "payload_key": "warehouse_statistical_dashboard.valid_payloads[0]",
+      "data_key": "dashboard_sample_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_point_data_keys": ["total_product", "import_by_date", "export_by_date", "not_installation_by_date", "total_PO", "total_project"],
+      "expected_list_data_keys": ["import", "export", "installation"],
+      "expected_chart_data_keys": ["pie_chart", "bar_chart"],
+      "suite": "dashboard_smoke_tests",
+      "tags": ["dashboard", "happy_path"]
+    },
+    {
+      "name": "dashboard_success_empty_data",
+      "description": "Test Dashboard API khi không có dữ liệu",
+      "payload_key": "warehouse_statistical_dashboard.valid_payloads[1]",
+      "data_key": "empty_dashboard_data",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_point_data_keys": ["total_product", "import_by_date", "export_by_date", "not_installation_by_date", "total_PO", "total_project"],
+      "expected_list_data_keys": ["import", "export", "installation"],
+      "expected_chart_data_keys": ["pie_chart", "bar_chart"],
+      "suite": "dashboard_smoke_tests",
+      "tags": ["dashboard", "empty_data"]
+    }
+  ],
+  "warehouse_statistical_dashboard_error_cases": [
+    {
+      "name": "dashboard_invalid_session",
+      "description": "Test Dashboard API với session không hợp lệ",
+      "payload_key": "warehouse_statistical_dashboard.valid_payloads[0]",
+      "mock_session": false,
+      "expected_status": "error",
+      "expected_message_contains": "Phiên làm việc",
+      "suite": "dashboard_error_tests",
+      "tags": ["dashboard", "authentication"]
+    },
+    {
+      "name": "dashboard_database_error",
+      "description": "Test Dashboard API với lỗi database",
+      "payload_key": "warehouse_statistical_dashboard.valid_payloads[0]",
+      "mock_session": true,
+      "mock_connection_error": "Database connection failed",
+      "expected_status": "error",
+      "expected_message_contains": "Database connection failed",
+      "suite": "dashboard_error_tests",
+      "tags": ["dashboard", "database"]
+    }
+  ],
+  "warehouse_statistical_detail_success_cases": [
+    {
+      "name": "detail_success_existing_item",
+      "description": "Test Detail API với ID tồn tại",
+      "payload_key": "warehouse_statistical_detail_view.valid_payloads[0]",
+      "data_key": "warehouse_statistical_detail_data.item_1",
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_structure": "object",
+      "suite": "detail_view_tests",
+      "tags": ["detail", "happy_path"]
+    },
+    {
+      "name": "detail_success_different_ids",
+      "description": "Test Detail API với các ID khác nhau",
+      "payload_key": "warehouse_statistical_detail_view.valid_payloads[1]",
+      "data_key": "warehouse_statistical_detail_data.item_2", 
+      "mock_session": true,
+      "expected_status": "success",
+      "expected_data_structure": "object",
+      "suite": "detail_view_tests",
+      "tags": ["detail", "multiple_ids"]
+    }
+  ],
+  "warehouse_statistical_detail_error_cases": [
+    {
+      "name": "detail_item_not_found",
+      "description": "Test Detail API khi item không tồn tại",
+      "payload_key": "warehouse_statistical_detail_view.edge_case_payloads[0]",
+      "data_key": "warehouse_statistical_detail_data.not_found",
+      "mock_session": true,
+      "expected_status": "error",
+      "expected_message_contains": "not found",
+      "suite": "detail_view_tests",
+      "tags": ["detail", "not_found"]
+    },
+    {
+      "name": "detail_invalid_session",
+      "description": "Test Detail API với session không hợp lệ",
+      "payload_key": "warehouse_statistical_detail_view.valid_payloads[0]",
+      "mock_session": false,
+      "expected_status": "error", 
+      "expected_message_contains": "Phiên làm việc",
+      "suite": "detail_view_tests",
+      "tags": ["detail", "authentication"]
+    },
+    {
+      "name": "detail_database_error",
+      "description": "Test Detail API với lỗi database",
+      "payload_key": "warehouse_statistical_detail_view.valid_payloads[0]",
+      "mock_session": true,
+      "mock_connection_error": "Database connection failed",
+      "expected_status": "error",
+      "expected_message_contains": "Database connection failed",
+      "suite": "detail_view_tests",
+      "tags": ["detail", "database"]
+    }
+  ],
+  "warehouse_statistical_upload_success_cases": [
+  {
+    "name": "upload_success_xlsx",
+    "payload_key": "warehouse_statistical_upload.valid_payloads[0]",
+    "expected_status": "success",
+    "expected_message_contains": "Import dữ liệu thành công"
+  }
+],
+"warehouse_statistical_upload_error_cases": [
+  {
+    "name": "upload_invalid_format",
+    "payload_key": "warehouse_statistical_upload.invalid_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "không được hỗ trợ"
+  }
+],
+"warehouse_statistical_upload_by_importexport_success_cases": [
+  {
+    "name": "upload_importexport_success_xlsx",
+    "payload_key": "warehouse_statistical_upload_by_importexport.valid_payloads[0]",
+    "expected_status": "success",
+    "expected_message_contains": "Import dữ liệu thành công"
+  }
+],
+"warehouse_statistical_upload_by_importexport_error_cases": [
+  {
+    "name": "upload_importexport_invalid_format",
+    "payload_key": "warehouse_statistical_upload_by_importexport.invalid_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "không được hỗ trợ"
+  },
+  {
+    "name": "upload_importexport_database_error",
+    "payload_key": "warehouse_statistical_upload_by_importexport.valid_payloads[0]",
+    "mock_connection_error": "Database connection failed",
+    "expected_status": "error",
+    "expected_message_contains": "Database connection failed"
+  }
+],
+"warehouse_importexport_view_success_cases": [
+  {
+    "name": "import_view_success",
+    "payload_key": "warehouse_importexport_view.valid_payloads[0]",
+    "expected_status": "success",
+    "expected_data_key": "import_id"
+  },
+  {
+    "name": "export_view_success",
+    "payload_key": "warehouse_importexport_view.valid_payloads[1]",
+    "expected_status": "success",
+    "expected_data_key": "export_id"
+  }
+],
+"warehouse_importexport_view_error_cases": [
+  {
+    "name": "invalid_option",
+    "payload_key": "warehouse_importexport_view.invalid_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "không hợp lệ"
+  },
+  {
+    "name": "invalid_session",
+    "payload_key": "warehouse_importexport_view.valid_payloads[0]",
+    "mock_session": false,
+    "expected_status": "error",
+    "expected_message_contains": "Phiên làm việc"
+  },
+  {
+    "name": "database_error",
+    "payload_key": "warehouse_importexport_view.valid_payloads[0]",
+    "mock_connection_error": "Database connection failed",
+    "expected_status": "error",
+    "expected_message_contains": "Database connection failed"
+  }
+],
+"warehouse_importexport_view_detail_success_cases": [
+  {
+    "name": "import_detail_success",
+    "payload_key": "warehouse_importexport_view_detail.valid_payloads[0]",
+    "expected_status": "success",
+    "expected_data_key": "import_id"
+  },
+  {
+    "name": "export_detail_success",
+    "payload_key": "warehouse_importexport_view_detail.valid_payloads[1]",
+    "expected_status": "success",
+    "expected_data_key": "export_id"
+  }
+],
+"warehouse_importexport_view_detail_error_cases": [
+  {
+    "name": "invalid_option",
+    "payload_key": "warehouse_importexport_view_detail.invalid_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "không hợp lệ"
+  },
+  {
+    "name": "invalid_session",
+    "payload_key": "warehouse_importexport_view_detail.valid_payloads[0]",
+    "mock_session": false,
+    "expected_status": "error",
+    "expected_message_contains": "Phiên làm việc"
+  },
+  {
+    "name": "not_found",
+    "payload_key": "warehouse_importexport_view_detail.edge_case_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "not found"
+  },
+  {
+    "name": "database_error",
+    "payload_key": "warehouse_importexport_view_detail.valid_payloads[0]",
+    "mock_connection_error": "Database connection failed",
+    "expected_status": "error",
+    "expected_message_contains": "Database connection failed"
+  }
+],
+"warehouse_importexport_upload_success_cases": [
+  {
+    "name": "import_upload_success",
+    "payload_key": "warehouse_importexport_upload.valid_payloads[0]",
+    "expected_status": "success",
+    "expected_message_contains": "import"
+  },
+  {
+    "name": "export_upload_success",
+    "payload_key": "warehouse_importexport_upload.valid_payloads[1]",
+    "expected_status": "success",
+    "expected_message_contains": "export"
+  }
+],
+"warehouse_importexport_upload_error_cases": [
+  {
+    "name": "invalid_option",
+    "payload_key": "warehouse_importexport_upload.invalid_payloads[0]",
+    "expected_status": "error",
+    "expected_message_contains": "không hợp lệ"
+  },
+  {
+    "name": "invalid_format",
+    "payload_key": "warehouse_importexport_upload.invalid_payloads[1]",
+    "expected_status": "error",
+    "expected_message_contains": "không được hỗ trợ"
+  },
+  {
+    "name": "invalid_session",
+    "payload_key": "warehouse_importexport_upload.valid_payloads[0]",
+    "mock_session": false,
+    "expected_status": "error",
+    "expected_message_contains": "Phiên làm việc"
+  },
+  {
+    "name": "database_error",
+    "payload_key": "warehouse_importexport_upload.valid_payloads[0]",
+    "mock_connection_error": "Database connection failed",
+    "expected_status": "error",
+    "expected_message_contains": "Database connection failed"
+  }
+],
+"warehouse_import_export_download_success_cases": [
+    {
+      "name": "import_with_ticket",
+      "option": "import",
+      "ticket_id": "1",
+      "project_code": null,
+      "expected_status": "success",
+      "tags": ["import", "ticket_id", "happy_path"]
+    },
+    {
+      "name": "import_with_project",
+      "option": "import", 
+      "ticket_id": null,
+      "project_code": "PROJ-A",
+      "expected_status": "success",
+      "tags": ["import", "project_code", "happy_path"]
+    },
+    {
+      "name": "export_with_ticket", 
+      "option": "export",
+      "ticket_id": "1",
+      "project_code": null,
+      "expected_status": "success",
+      "tags": ["export", "ticket_id", "happy_path"]
+    }
+  ],
+  "warehouse_import_export_download_error_cases": [
+    {
+      "name": "invalid_option",
+      "option": "invalid",
+      "ticket_id": "1", 
+      "project_code": null,
+      "expected_status": "error",
+      "expected_message_contains": "Invalid option",
+      "tags": ["validation", "error"]
+    },
+    {
+      "name": "no_filters",
+      "option": "import",
+      "ticket_id": null,
+      "project_code": null,
+      "expected_status": "error", 
+      "expected_message_contains": "",
+      "tags": ["validation", "error"]
+    },
+    {
+      "name": "invalid_session",
+      "option": "import",
+      "ticket_id": "1",
+      "project_code": null, 
+      "mock_session": false,
+      "expected_status": "error",
+      "expected_message_contains": "Phiên làm việc",
+      "tags": ["authentication", "error"]
+    }
+  ]
+}
