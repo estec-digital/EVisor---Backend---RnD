@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS "WS_Export" (
     "origin" VARCHAR(255),                  
     "quantity" INTEGER,                     
     "seri_number" VARCHAR(255),
-    "cabinet" VARCHAR(255)
+    "cabinet" VARCHAR(255),
+    "deleted" BOOLEAN DEFAULT FALSE,
+    "location" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "WS_Installation" (

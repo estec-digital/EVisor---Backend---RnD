@@ -13,9 +13,11 @@ from fastapi.responses import JSONResponse
 from openpyxl.styles import Alignment
 from dateutil import parser
 from decimal import Decimal
+import os
 
-def WorkManagement_Processing_function(content: bytes, conn, user_id):
+def WorkManagement_Processing_function(content: bytes, conn, user_id, filename):
     # try:
+        # filename = os.path.splitext(filename)[0]
         df = pd.read_excel(BytesIO(content))
         print("DF:",df.tail(10))
         date_columns = df.columns[8:]
@@ -65,88 +67,164 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
                 version = version_lastest[0] + 1
             print("version:", version)
 
+        
         for _, row in df_workmanagement.iterrows():
             with conn.cursor() as cursor:
-                # Kiểm tra xem bản ghi đã tồn tại chưa
-                cursor.execute("""
-                    SELECT "task_id", "full_name", "project_code", "start_date", "end_date", "QTY", "site", "description"  FROM "WorkManagement"
-                    WHERE "owner" = %s AND "full_name" = %s AND "project_code" = %s AND "description" = %s 
-                """, (row['owner'], row['full_name'], row['project_code'], row['description']))
-                existing = cursor.fetchone()
-                print(existing)
+                query_insert = """
+                    INSERT INTO "WorkManagement" 
+                    ("owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status", "version")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING "task_id"
+                """
+                cursor.execute(query_insert, (
+                    row['owner'],
+                    row['full_name'],
+                    row['project_code'],
+                    row['description'],
+                    row['start_date'],
+                    row['end_date'],
+                    row['QTY'],
+                    row['site'], 
+                    row['status'],
+                    version
+                ))
+                task_id = cursor.fetchone()[0]
+                print("task_id:", task_id)
+        conn.commit()
 
-                if existing:
-                    # Nếu tồn tại → cập nhật
-                    task_id_db, full_name_db, project_code_db, start_date_db, end_date_db, QTY_db, site_db, description_db = existing
-                    # Ep kieu de so sanh
-                    start_date_file = pd.to_datetime(row["start_date"]).date()
-                    end_date_file = pd.to_datetime(row["end_date"]).date()
-                    start_date_db = start_date_db.date()
-                    end_date_db = end_date_db.date()
-                    QTY_file = Decimal(str(row["QTY"])) 
+        if version != 1:
+            with conn.cursor() as cursor:
+                query_last_version = '''
+                    SELECT "owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "version"
+                    FROM "WorkManagement"
+                    WHERE "owner" = %s AND "version" = %s 
+                '''
+                cursor.execute(query_last_version, (user_id, version_lastest))
+                df_last_version = pd.DataFrame(cursor.fetchall(), columns=["owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "version"])
 
-                    print(full_name_db, project_code_db, start_date_db, end_date_db, QTY_db, site_db)
-                    print(row["full_name"] != full_name_db , row["project_code"] != project_code_db , start_date_file != start_date_db , end_date_file != end_date_db , 
-                    QTY_file != QTY_db , row["site"] != site_db, row["description"] != description_db)
-                    
-                    # Kiểm tra thay đổi
-                    changed = (
-                        row["full_name"] != full_name_db or
-                        row["project_code"] != project_code_db or
-                        start_date_file != start_date_db or
-                        end_date_file != end_date_db or
-                        QTY_file != QTY_db or
-                        (row["site"] or "").strip() != (site_db or "").strip() or
-                        (row["description"] or "").strip() != (description_db or "").strip()
-                    )
+                query_new_version = '''
+                    SELECT "owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "version"
+                    FROM "WorkManagement"
+                    WHERE "owner" = %s AND "version" = %s 
+                '''
+                cursor.execute(query_new_version, (user_id, version))
+                df_new_version = pd.DataFrame(cursor.fetchall(), columns=["owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "version"])
 
-                    if changed:
-                        # Nếu có thay đổi → status = 5
-                        cursor.execute("""
-                            INSERT INTO "WorkManagement" 
-                            ("owner", "full_name", "project_code", "description", "start_date", "end_date", 
-                            "QTY", "site", "status", "version")
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            RETURNING "task_id"
-                        """, (
-                            row['owner'], row['full_name'], row['project_code'], row['description'],
-                            row['start_date'], row['end_date'], row['QTY'], row['site'],
-                            5, version
-                        ))
-                    else:
-                        # Nếu không thay đổi → status = 0
-                        cursor.execute("""
-                            INSERT INTO "WorkManagement" 
-                            ("owner", "full_name", "project_code", "description", "start_date", "end_date", 
-                            "QTY", "site", "status", "version")
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            RETURNING "task_id"
-                        """, (
-                            row['owner'], row['full_name'], row['project_code'], row['description'],
-                            row['start_date'], row['end_date'], row['QTY'], row['site'],
-                            row['status'], version
-                        ))
-                else:
-                    cursor.execute("""
-                        INSERT INTO "WorkManagement" 
-                        ("owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status", "version")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING "task_id"
-                    """, (
+                df_group = pd.concat([df_last_version, df_new_version], ignore_index=True)
+                df_updated = df_group[~df_group.duplicated(
+                    subset=["full_name", "project_code", "description", "start_date", "end_date", "QTY", "site"],
+                    keep=False
+                )]
+                print("df_updated", df_updated)     
+            
+            for _, row in df_updated.iterrows():
+                print("row:", row['version'])
+                print("version_lastest:", version_lastest)
+                status = 5 if int(row['version']) == version_lastest[0] else 6
+                print("status:", status)
+                with conn.cursor() as cursor:
+                    query_update_status = """
+                        UPDATE "WorkManagement"
+                        SET "status" = %s
+                        WHERE "owner" = %s AND "full_name" = %s AND "project_code" = %s AND "start_date" = %s AND "end_date" = %s AND "QTY" = %s AND "site" = %s AND "version" = %s
+                    """
+                    cursor.execute(query_update_status, (
+                        status,
                         row['owner'],
                         row['full_name'],
                         row['project_code'],
-                        row['description'],
                         row['start_date'],
                         row['end_date'],
                         row['QTY'],
-                        row['site'], 
-                        row['status'],
-                        version
+                        row['site'],
+                        row['version']
                     ))
-                    new_id = cursor.fetchone()[0]
-                    print("Inserted new task_id:", new_id)
-                conn.commit()
+                    conn.commit()
+
+        # for _, row in df_workmanagement.iterrows():
+        #     with conn.cursor() as cursor:
+        #         # Kiểm tra xem bản ghi đã tồn tại chưa
+        #         cursor.execute("""
+        #             SELECT "task_id", "full_name", "project_code", "start_date", "end_date", "QTY", "site", "description"  FROM "WorkManagement"
+        #             WHERE "owner" = %s AND "full_name" = %s AND "project_code" = %s AND "description" = %s 
+        #         """, (row['owner'], row['full_name'], row['project_code'], row['description']))
+        #         existing = cursor.fetchone()
+        #         print(existing)
+
+        #         if existing:
+        #             # Nếu tồn tại → cập nhật
+        #             task_id_db, full_name_db, project_code_db, start_date_db, end_date_db, QTY_db, site_db, description_db = existing
+        #             # Ep kieu de so sanh
+        #             start_date_file = pd.to_datetime(row["start_date"]).date()
+        #             end_date_file = pd.to_datetime(row["end_date"]).date()
+        #             start_date_db = start_date_db.date()
+        #             end_date_db = end_date_db.date()
+        #             QTY_file = Decimal(str(row["QTY"])) 
+
+        #             print(full_name_db, project_code_db, start_date_db, end_date_db, QTY_db, site_db)
+        #             print(row["full_name"] != full_name_db , row["project_code"] != project_code_db , start_date_file != start_date_db , end_date_file != end_date_db , 
+        #             QTY_file != QTY_db , row["site"] != site_db, row["description"] != description_db)
+                    
+        #             # Kiểm tra thay đổi
+        #             changed = (
+        #                 row["full_name"] != full_name_db or
+        #                 row["project_code"] != project_code_db or
+        #                 start_date_file != start_date_db or
+        #                 end_date_file != end_date_db or
+        #                 QTY_file != QTY_db or
+        #                 (row["site"] or "").strip() != (site_db or "").strip() or
+        #                 (row["description"] or "").strip() != (description_db or "").strip()
+        #             )
+
+        #             if changed:
+        #                 # Nếu có thay đổi → status = 5
+        #                 cursor.execute("""
+        #                     INSERT INTO "WorkManagement" 
+        #                     ("owner", "full_name", "project_code", "description", "start_date", "end_date", 
+        #                     "QTY", "site", "status", "version")
+        #                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        #                     RETURNING "task_id"
+        #                 """, (
+        #                     row['owner'], row['full_name'], row['project_code'], row['description'],
+        #                     row['start_date'], row['end_date'], row['QTY'], row['site'],
+        #                     5, version
+        #                 ))
+        #             else:
+        #                 # Nếu không thay đổi → status = 0
+        #                 cursor.execute("""
+        #                     INSERT INTO "WorkManagement" 
+        #                     ("owner", "full_name", "project_code", "description", "start_date", "end_date", 
+        #                     "QTY", "site", "status", "version")
+        #                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        #                     RETURNING "task_id"
+        #                 """, (
+        #                     row['owner'], row['full_name'], row['project_code'], row['description'],
+        #                     row['start_date'], row['end_date'], row['QTY'], row['site'],
+        #                     row['status'], version
+        #                 ))
+        #         else:
+        #             cursor.execute("""
+        #                 INSERT INTO "WorkManagement" 
+        #                 ("owner", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status", "version")
+        #                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        #                 RETURNING "task_id"
+        #             """, (
+        #                 row['owner'],
+        #                 row['full_name'],
+        #                 row['project_code'],
+        #                 row['description'],
+        #                 row['start_date'],
+        #                 row['end_date'],
+        #                 row['QTY'],
+        #                 row['site'], 
+        #                 row['status'],
+        #                 version
+        #             ))
+        #             new_id = cursor.fetchone()[0]
+        #             print("Inserted new task_id:", new_id)
+        #         conn.commit()
+        
+
         return df_workmanagement.head(50)
     # except Exception as e:
     #     return {
@@ -157,7 +235,7 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id):
 def WorkManagement_View_function(input: BaseModel, conn):
     try:
         query = """
-            SELECT "task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status"
+            SELECT "task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status", "version"
             FROM "WorkManagement"
             WHERE "owner" = %s
         """
@@ -196,7 +274,7 @@ def WorkManagement_View_function(input: BaseModel, conn):
             cursor.execute(query, params)
             result = cursor.fetchall()
             if result:
-                df = pd.DataFrame(result, columns=["task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status"])
+                df = pd.DataFrame(result, columns=["task_id", "full_name", "project_code", "description", "start_date", "end_date", "QTY", "site", "status", "version"])
             else:
                 return {
                     "status": "error",

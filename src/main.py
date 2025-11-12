@@ -13,6 +13,7 @@ from src.Authentication import *
 from src.DB_Connection import *
 from src.WorkManagement import *
 from src.WarehouseManagement import *
+from src.DesignConstructionDepartment import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -215,7 +216,7 @@ async def WorkManagement_Processing_api(file: UploadFile = File(...), user_id: s
             if issummary:
                 print("ismmary:", issummary)
                 conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-                workmanagement = WorkManagement_Processing_function(content, conn, user_id)
+                workmanagement = WorkManagement_Processing_function(content, conn, user_id, file.filename)
                 return {
                     "status": "success",
                     "message": "Đã tạo quản lý kế hoạch!"
@@ -636,6 +637,81 @@ async def WarehouseImportExport_Download_api(input: WarehouseImportExport_Downlo
 # --------------------------------------------------------
 # Warehouse_Installation
 # --------------------------------------------------------
+class FilterModel_WarehouseInstallation_View(BaseModel):
+    # datetime_export: Optional[datetime]
+    cabinet_no: Optional[str]
+    project_code: Optional[str]
+    seri_number: Optional[str]
+    part_no: Optional[str]
+    installed: Optional[bool]
+
+class WarehouseInstallation_View(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    filter: FilterModel_WarehouseInstallation_View
+
+@app.post("/WS/WarehouseInstallation_View", tags=["Warehouse"])
+async def WarehouseInstallation_View_api(input: WarehouseInstallation_View):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        else:
+            return WarehouseInstallation_View_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+class FormWarehouseInstallation(BaseModel):
+    id: Optional[int] = None
+    higher_lever_function: Optional[str] = None
+    location: Optional[str] = None
+    dt: Optional[str] = None
+    quantity: Optional[int] = None
+    description: Optional[str] = None
+    part_no: Optional[str] = None
+    seri_number: Optional[str] = None
+    manufacturer: Optional[str] = None
+    project_code: Optional[str] = None
+    cabinet_no: Optional[str] = None
+    status: Optional[int] = None
+
+class WarehouseInstallation_DML(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    dml_action: str = Field(default="delete", example="delete") # "insert", "update", "delete"
+    form: FormWarehouseInstallation
+
+@app.post("/WS/WarehouseInstallation_DML", tags=["Warehouse"])
+async def WarehouseInstallation_DML_api(input: WarehouseInstallation_DML):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            if input.dml_action == "insert":
+                return WarehouseInstallation_DML_Insert_function(input, conn)
+            elif input.dml_action == "update":
+                return WarehouseInstallation_DML_Update_function(input, conn)
+            elif input.dml_action == "delete":
+                return WarehouseInstallation_DML_Delete_function(input, conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 @app.post("/WS/WarehouseInstallation_Upload", tags=["Warehouse"])
 async def WarehouseInstallation_Upload_api(
     request_id: str = Form("evisor-1234567890"),
@@ -680,6 +756,113 @@ async def WarehouseInstallation_Download_api(input: WarehouseInstallation_Downlo
             "message": str(e)
     }
 
+class FormWarehouseImportScan_Form1(BaseModel):
+    project_code: str = Field(default="project_code", example="project_code")
+    po: str = Field(default="po", example="po")
+    code: str = Field(default="code", example="code")
+
+class WarehouseImport_Scan_Form1(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    form: FormWarehouseImportScan_Form1
+
+@app.post("/WS/WarehouseImport/Scan/Form1", tags=["Warehouse Application"])
+async def WarehouseImport_Scan_Form1_api(input: WarehouseImport_Scan_Form1):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseImport_Scan_Form1_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+
+
+class FormWarehouseImportScan_Form2(BaseModel):
+    project_code: str = Field(default="project_code", example="project_code")
+    po: str = Field(default="po", example="po")
+    part_no: str = Field(default="part_no", example="part_no")
+    seri_no: str = Field(default="seri_no", example="seri_no")
+
+class WarehouseImport_Scan_Form2(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    form: FormWarehouseImportScan_Form2
+
+@app.post("/WS/WarehouseImport/Scan/Form2", tags=["Warehouse Application"])
+async def WarehouseImport_Scan_Form2_api(input: WarehouseImport_Scan_Form2):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseImport_Scan_Form2_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+
+
+class FormWarehouseInstallationScan_Form1(BaseModel):
+    project_code: str = Field(default="project_code", example="project_code")
+    location: str = Field(default="location", example="location")
+    cabinet_no: str = Field(default="cabinet_no", example="cabinet_no")
+    code: str = Field(default="code", example="code")
+
+class WarehouseInstallation_Scan_Form1(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    form: FormWarehouseInstallationScan_Form1
+
+@app.post("/WS/WarehouseInstallation/Scan/Form1", tags=["Warehouse Application"])
+async def WarehouseInstallation_Scan_Form1_api(input: WarehouseInstallation_Scan_Form1):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return WarehouseInstallation_Scan_Form1_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+# --------------------------------------------------------
+# Design and Construction Department
+# --------------------------------------------------------
+@app.post("/DCD/WarehouseInstallation_Download", tags=["Design and Construction Department"])
+async def DCD_WarehouseInstallation_Upload_api(
+    request_id: str = Form("evisor-1234567890"),
+    owner: str = Form("hoanvlh"),
+    file: UploadFile = File(...)
+):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, owner)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return DCD_WarehouseInstallation_Upload_function(conn, owner, file)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
 # --------------------------------------------------------
 # Authentication
 # --------------------------------------------------------
@@ -736,22 +919,20 @@ def Authentication_ChangePassword_api(input: Authentication_ChangePassword):
 # WebSocket
 # --------------------------------------------------------
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                payload = json.loads(data)
-                # payload example: {"request_id": "...", "owner": "...", "option": "..."}
-                print("Received payload:", payload)
-                
-                # TODO: xử lý logic import/export hoặc gọi DB
-                response_msg = f"Payload processed: {payload['request_id']}"
-                await websocket.send_text(response_msg)
-            except json.JSONDecodeError:
-                await websocket.send_text("Invalid JSON")
-    except WebSocketDisconnect:
-        print("Client disconnected")
+# from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+# @app.websocket("/ws")
+# async def websocket_endpoint(websocket: WebSocket):
+#     await websocket.accept()
+#     try:
+#         while True:
+#             data = await websocket.receive_text()
+#             try:
+#                 payload = json.loads(data)
+#                 # payload example: {"request_id": "...", "owner": "...", "option": "..."}
+#                 print("Received payload:", payload)
+#                 response_msg = f"Payload processed: {payload['request_id']}"
+#                 await websocket.send_text(response_msg)
+#             except json.JSONDecodeError:
+#                 await websocket.send_text("Invalid JSON")
+#     except WebSocketDisconnect:
+#         print("Client disconnected")

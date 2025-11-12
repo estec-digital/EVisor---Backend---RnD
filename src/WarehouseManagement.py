@@ -8,6 +8,7 @@ from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from psycopg2.extras import RealDictCursor
 import io
 import openpyxl
+import re
 
 # def WarehouseStatistical_View_function(input, conn):
 #     try:
@@ -93,6 +94,14 @@ import openpyxl
 #         }
 #     finally:
 #         cursor.close()
+def normalize_part_no(part_no):
+    if not part_no:
+        return ""
+    # Chỉ giữ A-Z, a-z, 0-9
+    part_no = re.sub(r'[^A-Za-z0-9]', '', part_no)
+    # Loại bỏ "1P" ở đầu nếu có
+    part_no = re.sub(r'^1P', '', part_no, flags=re.IGNORECASE)
+    return part_no
 
 def WarehouseStatistical_View_function(input, conn):
     try:
@@ -146,15 +155,35 @@ def WarehouseStatistical_View_function(input, conn):
         rows = cursor.fetchall()
         items = []
         for row in rows:
+            part_no_input = row.get("part_no", "")
+            normalized_input = normalize_part_no(part_no_input)
+
+            query = '''
+                SELECT "description" as "product_name", "description", "manufacturer"
+                FROM "WS_Installation"
+                WHERE REGEXP_REPLACE("part_no", '[^A-Za-z0-9]', '', 'g') = %s
+            '''
+            cursor.execute(query, (normalized_input,))
+            stat_row = cursor.fetchone()
+            if not stat_row:
+                query = '''
+                    SELECT "product_name", "description", "origin" as "manufacturer", "unit"
+                    FROM "WS_Statistical"
+                    WHERE "part_no" ILIKE %s
+                '''
+                cursor.execute(query, (row.get("part_no", ""),))
+                stat_row = cursor.fetchone()
+            # else: 
+            #     stat_row['product_name'] = stat_row.get("manufacturer", "")
             item = {
                 "id": row.get("id", None),
-                "product_name": row.get("product_name", ""),
-                "description": row.get("description", ""),
+                "product_name": stat_row.get("product_name", "") if stat_row else "",
+                "description": stat_row.get("description", "") if stat_row else "",
                 "time": row.get("time", ""),
                 "project_code": row.get("project_code", ""),
                 "part_no": row.get("part_no", ""),
-                "origin": row.get("origin", ""),
-                "unit": row.get("unit", ""),
+                "origin": stat_row.get("manufacturer", "") if stat_row else "",
+                "unit": stat_row.get("unit", "Cái") if stat_row else "Cái",
                 "quantity_import": row.get("quantity", ""),
                 "quantity_export": row.get("quantity_export", ""),
                 "quantity_stock": row.get("quantity", "") - row.get("quantity_export", ""),
@@ -432,22 +461,33 @@ def WarehouseImportExport_View_function(conn, table_name: str):
             SELECT * 
             FROM "{table_name}" 
             WHERE "deleted" = FALSE
-            ORDER BY "import_time" DESC
+            ORDER BY "{'import' if table_name == 'WS_Import' else 'export'}_time" DESC
             '''
         cursor.execute(query)
         rows = cursor.fetchall()
 
         items = []
         for row in rows:
+            part_no_input = row[6]
+            normalized_input = normalize_part_no(part_no_input)
+
+            query = '''
+                SELECT "description" as "product_name", "manufacturer"
+                FROM "WS_Installation"
+                WHERE REGEXP_REPLACE("part_no", '[^A-Za-z0-9]', '', 'g') = %s
+            '''
+            cursor.execute(query, (normalized_input,))
+            stat_row = cursor.fetchone()
+
             item = {
                 "id": row[0],
                 f"{'import' if table_name == 'WS_Import' else 'export'}_id": row[1],
                 "time": row[2],
                 f"{'import' if table_name == 'WS_Import' else 'export'}_time": row[3],
                 "project_code": row[4],
-                "product_name": row[5],
+                "product_name": stat_row[0] if stat_row else row[5],
                 "part_no": row[6],
-                "origin": row[7],
+                "origin": stat_row[1] if stat_row else row[7],
                 "quantity": row[8],
                 "seri_number": row[9]
             }
@@ -658,15 +698,17 @@ def WarehouseImportExport_DML_Delete_function(input, conn, option):
                 "message": "Option không hợp lệ. Chỉ hỗ trợ 'import' hoặc 'export'."
                 }
 
-        query = sql.SQL("""
-            UPDATE {table} 
-            SET
-                "deleted" = TRUE
-            WHERE "id" = %s
-        """).format(
-            table=sql.Identifier(table_name)
-        )
-
+        # query = sql.SQL("""
+        #     UPDATE {table} 
+        #     SET
+        #         "deleted" = TRUE
+        #     WHERE "id" = %s
+        # """).format(
+        #     table=sql.Identifier(table_name)
+        # )
+        query = f""" 
+            DELETE FROM "{table_name}" WHERE id = %s
+        """
         cursor.execute(query, (input.form.id,))
 
         if cursor.rowcount == 0:
@@ -799,53 +841,48 @@ def WarehouseImportExport_Upload_function(conn, file, option: str):
 
 def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MINIO_BUCKET: str):
     # SốTT	Thời gian	Mã Dự án	Tên hàng	Mã hàng	Hãng	Số lượng	Seri No.
-
     cursor = None
+    filename = None
     try:
         cursor = conn.cursor()
         # --- Chọn bảng phù hợp ---
         if input.option == "import":
+            query = '''
+                    SELECT * FROM "WS_Import"
+                    WHERE 1=1
+                '''
+            params = []
             if input.ticket_id:
-                query = '''
-                    SELECT * FROM "WS_Import"
-                    WHERE "import_id" = %s 
-                '''
-                cursor.execute(query, (input.ticket_id,))
+                query += ' AND "import_id" = %s '
+                params.append(input.ticket_id)
             elif input.project_code:
-                query = '''
-                    SELECT * FROM "WS_Import"
-                    WHERE "project_code" = %s 
-                '''
-                cursor.execute(query, (input.project_code,))
-
+                query += ' AND "project_code" = %s '
+                params.append(input.project_code)
             elif input.ticket_id and input.project_code:
-                query = '''
-                    SELECT * FROM "WS_Import"
-                    WHERE "import_id" = %s 
-                    AND "project_code" = %s 
-                '''
-                cursor.execute(query, (input.ticket_id, input.project_code))
+                query += ' AND "import_id" = %s '
+                params.append(input.ticket_id)
+                query += ' AND "project_code" = %s '
+                params.append(input.project_code)
+            cursor.execute(query, params)
             object_prefix = "Import"
         elif input.option == "export":
+            query = '''
+                    SELECT * FROM "WS_Export"
+                    WHERE 1=1
+                '''
+            params = []
             if input.ticket_id:
-                query = '''
-                    SELECT * FROM "WS_Export"
-                    WHERE "export_id" = %s 
-                '''
-                cursor.execute(query, (input.ticket_id,))
+                query += ' AND "export_id" = %s '
+                params.append(input.ticket_id)
             elif input.project_code:
-                query = '''
-                    SELECT * FROM "WS_Export"
-                    WHERE "project_code" = %s 
-                '''
-                cursor.execute(query, (input.project_code))
+                query += ' AND "project_code" = %s '
+                params.append(input.project_code)
             elif input.ticket_id and input.project_code:
-                query = '''
-                    SELECT * FROM "WS_Export"
-                    WHERE "export_id" = %s 
-                    AND "project_code" = %s 
-                '''
-                cursor.execute(query, (input.ticket_id, input.project_code))
+                query += ' AND "export_id" = %s '
+                params.append(input.ticket_id)
+                query += ' AND "project_code" = %s '
+                params.append(input.project_code)
+            cursor.execute(query, params)
             object_prefix = "Export"
         else:
             raise ValueError("Invalid option. Must be 'import' or 'export'.")
@@ -870,6 +907,8 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
             filename = f"{object_prefix}_{input.ticket_id}.xlsx"
         elif input.project_code:
             filename = f"{object_prefix}_{input.project_code}.xlsx"
+        else:
+            filename = f"{object_prefix}.xlsx"
         path_file = f"./minio/minio_data/Workshop/Warehouse/{object_prefix}/{filename}"
         os.makedirs(os.path.dirname(path_file), exist_ok=True)
         with pd.ExcelWriter(path_file, engine='openpyxl') as writer:
@@ -948,55 +987,134 @@ def WarehouseImportExport_Download_function(conn, input, minio_client: Minio, MI
 # ------------------------
 # Warehouse_Installation
 # ------------------------
+def WarehouseInstallation_View_function(conn, input):
+    try:
+        cursor = conn.cursor()
+        base_query = '''
+            SELECT * FROM "WS_Installation"
+            WHERE 1=1
+        '''
+        params = []
+
+        # Ghép điều kiện động
+        if input.filter.project_code:
+            base_query += ' AND "project_code" ILIKE %s'
+            params.append(f"%{input.filter.project_code}%")
+        if input.filter.seri_number:
+            base_query += ' AND "seri_number" ILIKE %s'
+            params.append(f"%{input.filter.seri_number}%")
+        if input.filter.part_no:
+            base_query += ' AND "part_no" ILIKE %s'
+            params.append(f"%{input.filter.part_no}%")
+        if input.filter.cabinet_no:
+            base_query += ' AND "cabinet_no" ILIKE %s'
+            params.append(f"%{input.filter.cabinet_no}%")
+        if input.filter.installed is True:
+            base_query += ' AND "seri_number" IS NOT NULL'
+        elif input.filter.installed is False:
+            base_query += ' AND "seri_number" IS NULL'
+
+        base_query += ' ORDER BY "id" DESC'
+
+        # Nếu không có filter nào => giới hạn kết quả
+        if not any([
+            input.filter.project_code,
+            input.filter.seri_number,
+            input.filter.part_no,
+            input.filter.cabinet_no,
+            input.filter.installed
+        ]):
+            base_query += " LIMIT 999999"
+
+        cursor.execute(base_query, params)
+        rows = cursor.fetchall()
+        data = []
+        for row in rows:
+            data_dict = {
+                "id": row[0],
+                "higher_lever_function": row[1],
+                "location": row[2],
+                "dt": row[3],
+                "quantity": row[4],
+                "description": row[5],
+                "part_no": row[6],
+                "seri_number": row[7],
+                "manufacturer": row[8],
+                "project_code": row[9],
+                "cabinet_no": row[10],
+                "status": 0 if row[7] is not None else 1
+            }
+            data.append(data_dict)
+
+        return {
+            "status": "success",
+            "data": data
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+
 def WarehouseInstallation_Upload_function(conn, owner, file):
     try:
         filename = file.filename.rsplit('.', 1)[0]
         project_code = filename.split('-')[:2]
         project_code = '-'.join(project_code)
+        cabinet_no = filename.split('-')[2]
 
         cursor = conn.cursor()
         contents = file.file.read()
-        df = pd.read_excel(io.BytesIO(contents))
-        for _, row in df.iterrows():
-            serial_number = row.get("SERIAL NUMBER")
-            # Nếu serial_number là NaN hoặc chuỗi rỗng, chuyển thành None
-            if pd.isna(serial_number) or serial_number == "":
-                serial_number = None
+        # df = pd.read_excel(io.BytesIO(contents))
+        all_sheets = pd.read_excel(io.BytesIO(contents), sheet_name=None)
+        for sheet_name, df in all_sheets.items():
+            if sheet_name != 'Summarized parts list':
+                for _, row in df.iterrows():
+                    serial_number = row.get("SERIAL NUMBER")
+                    # Nếu serial_number là NaN hoặc chuỗi rỗng, chuyển thành None
+                    if pd.isna(serial_number) or serial_number == "":
+                        serial_number = None
 
-            query = """
-                INSERT INTO "WS_Installation" (
-                    "id",
-                    "higher_lever_function",
-                    "location",      
-                    "dt",
-                    "quantity",            
-                    "description",                      
-                    "part_no",               
-                    "seri_number",
-                    "manufacturer",
-                    "project_code"
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (
-                row.get("NO."),
-                row.get("HIGHER LEVEL FUNCTION"),
-                row.get("LOCATION"),
-                row.get("DT"),
-                row.get("QUANTITY"),
-                row.get("DESCRIPTION 1"),
-                row.get("ORDER NUMBER"),
-                serial_number,
-                row.get("MANUFACTURER"),
-                project_code
-            ))
-
-        conn.commit()
+                    query = """
+                        INSERT INTO "WS_Installation" (
+                            "higher_lever_function",
+                            "location",      
+                            "dt",
+                            "quantity",            
+                            "description",                      
+                            "part_no",               
+                            "seri_number",
+                            "manufacturer",
+                            "project_code",
+                            "cabinet_no"
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """
+                    cursor.execute(query, (
+                        # row.get("NO."),
+                        row.get("HIGHER LEVEL FUNCTION"),
+                        row.get("LOCATION"),
+                        row.get("DT"),
+                        row.get("QUANTITY"),
+                        row.get("DESCRIPTION 1"),
+                        row.get("ORDER NUMBER"),
+                        serial_number,
+                        row.get("MANUFACTURER"),
+                        project_code,
+                        sheet_name if cabinet_no is None else cabinet_no
+                    ))
+                conn.commit()
         cursor.close()
-
         return {
             "status": "success",
-            "message": f"Tải lên thành công {len(df)} dòng dữ liệu."
+            "message": f"Tải lên thành công dữ liệu."
         }
 
     except Exception as e:
@@ -1099,17 +1217,27 @@ def WarehouseStatistical_Dashboard_function(conn, input):
         list_data = {}
         chart_data = {}
         cursor = conn.cursor()
+        input.filter.datetime_end = input.filter.datetime_end.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        input.filter.datetime_start = input.filter.datetime_start.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         ### ---------------------------------------------------------------------------------------- 
         ### Point data ###
         ### ----------------------------------------------------------------------------------------
-        # Tổng số lượng hàng hóa
-        query_total_product = '''
+        # Tổng số lượng hàng hóa nhập
+        query_total_import_product = '''
             SELECT 
-                COUNT(DISTINCT "id") AS total_product
+                COUNT(DISTINCT "id") AS total_import_product
             FROM "WS_Import"
         '''
-        cursor.execute(query_total_product)
-        total_product = cursor.fetchone()
+        cursor.execute(query_total_import_product)
+        total_import_product = cursor.fetchone()
+        # Tổng số lượng hàng hóa nhập
+        query_total_export_product = '''
+            SELECT 
+                COUNT(DISTINCT "id") AS total_export_product
+            FROM "WS_Export"
+        '''
+        cursor.execute(query_total_export_product)
+        total_export_product = cursor.fetchone()
         # Tổng số lượng nhập trong ngày
         query_import_by_date = '''
             SELECT
@@ -1117,7 +1245,7 @@ def WarehouseStatistical_Dashboard_function(conn, input):
             FROM "WS_Import"
             WHERE DATE("import_time") <= %s AND DATE("import_time") >= %s 
         '''
-        cursor.execute(query_import_by_date, (input.filter.datetime_end, input.filter.datetime_start))
+        cursor.execute(query_import_by_date, (input.filter.datetime_end,input.filter.datetime_start))
         import_by_date = cursor.fetchone()
         # Tổng số lượng xuất trong ngày
         query_export_by_date = '''
@@ -1139,6 +1267,16 @@ def WarehouseStatistical_Dashboard_function(conn, input):
         cursor.execute(query_not_installation_by_date)
         not_installation_by_date = cursor.fetchone()
 
+        # Tổng số lượng chưa lắp đặt trong ngày
+        query_installation_by_date = '''
+            SELECT
+                COUNT(DISTINCT "id") AS installation_by_date
+            FROM "WS_Installation"
+            WHERE "seri_number" IS NOT NULL
+        '''
+        cursor.execute(query_installation_by_date)
+        installation_by_date = cursor.fetchone()
+
         # Tổng số PO
         query_total_PO = '''
             SELECT
@@ -1152,10 +1290,12 @@ def WarehouseStatistical_Dashboard_function(conn, input):
         total_project = row[1]
 
         point_data = {
-            "total_product": total_product[0],
+            "total_import_product": total_import_product[0],
+            "total_export_product": total_export_product[0],
             "import_by_date": import_by_date[0],
             "export_by_date": export_by_date[0],
             "not_installation_by_date": not_installation_by_date[0],
+            "installation_by_date": installation_by_date[0],
             "total_PO": total_PO,
             "total_project": total_project
         }
@@ -1225,7 +1365,7 @@ def WarehouseStatistical_Dashboard_function(conn, input):
             'quarter': 'YYYY-"Q"Q',
             'year': 'YYYY'
         }
-        chart_data['bar_chart'] = {}
+        chart_data['dual_chart'] = {}
         for range_type in list_range:
             date_format = format_map[range_type]
             query_import_export_by_date = f'''
@@ -1243,7 +1383,7 @@ def WarehouseStatistical_Dashboard_function(conn, input):
             '''
             cursor.execute(query_import_export_by_date)
             rows = cursor.fetchall()
-            chart_data['bar_chart'][range_type] = {
+            chart_data['dual_chart'][range_type] = {
                 "datetime_data": [row[0] for row in rows],
                 "import_data": [row[1] for row in rows],
                 "export_data": [row[2] for row in rows],
@@ -1255,6 +1395,460 @@ def WarehouseStatistical_Dashboard_function(conn, input):
             "list": list_data,
             "chart": chart_data
         }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseInstallation_DML_Insert_function(input, conn):
+    try:
+        with conn.cursor() as cursor:
+            query = """
+                INSERT INTO "WS_Installation" ("higher_lever_function", "location", "dt", "quantity", "description", "part_no", "seri_number", "manufacturer", "project_code", "cabinet_no")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (
+                input.form.higher_lever_function,
+                input.form.location,
+                input.form.dt,
+                input.form.quantity,
+                input.form.description,
+                input.form.part_no,
+                input.form.seri_number,
+                input.form.manufacturer,
+                input.form.project_code,
+                input.form.cabinet_no
+           ))
+            conn.commit()
+        return {
+            "status": "success",
+            "message": "Đã tạo đơn lắp đặt mới!"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseInstallation_DML_Update_function(input, conn):
+    try:
+        cursor = conn.cursor()
+        query = """
+            UPDATE "WS_Installation" 
+            SET 
+                "higher_lever_function" = %s, 
+                "location" = %s, 
+                "dt" = %s, 
+                "quantity" = %s, 
+                "description" = %s, 
+                "part_no" = %s, 
+                "seri_number" = %s, 
+                "manufacturer" = %s, 
+                "project_code" = %s, 
+                "cabinet_no" = %s
+            WHERE "id" = %s
+        """
+        cursor.execute(query, (
+            input.form.higher_lever_function,
+            input.form.location,
+            input.form.dt,
+            input.form.quantity,
+            input.form.description,
+            input.form.part_no,
+            input.form.seri_number,
+            input.form.manufacturer,
+            input.form.project_code,
+            input.form.cabinet_no,
+            input.form.id
+        ))
+        if cursor.rowcount == 0:
+            return {
+                "status": "error",
+                "message": f"ID {input.form.id} không tồn tại."
+            }
+        conn.commit()
+        return {
+            "status": "success",
+            "message": "Đã chính sách đơn lắp đặt!"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseInstallation_DML_Delete_function(input, conn):
+    try:
+        cursor = conn.cursor()
+        query = """
+            DELETE FROM "WS_Installation" WHERE "id" = %s
+        """
+        cursor.execute(query, (input.form.id,))
+        if cursor.rowcount == 0:
+            return {
+                "status": "error",
+                "message": f"ID {input.form.id} không tồn tại."
+            }
+        conn.commit()
+        return {
+            "status": "success",
+            "message": "Đã xóa đơn lắp đặt!"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseImport_Scan_Form1_function(conn, input):
+    try:
+        cursor = conn.cursor()
+        import_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        code = input.form.code
+        if code.startswith("http://") or code.startswith("https://"):
+            code = re.sub(r'^https?://[^/]+/', '', code.strip())
+
+        
+        print("code:", code)
+        parts = code.split("+", 1)
+        part_no = parts[0].strip()
+        seri_no = parts[1].strip() if len(parts) > 1 else ''
+        print("part_no:", part_no)
+        print("seri_no:", seri_no)
+
+        query_check_exist = """
+            SELECT * 
+            FROM "WS_Import" 
+            WHERE "part_no" = %s 
+                AND "seri_number" = %s
+        """
+        cursor.execute(query_check_exist, (part_no, seri_no))
+        if cursor.rowcount > 0:
+            return {
+                "status": "error",
+                "message": f"Thiết bị {part_no} có số seri: {seri_no} đã tồn tại."
+            }
+        else:
+            part_no_shortcut = part_no
+            part_no_shortcut = re.sub(r'^1P', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = re.sub(r'-Z.*$', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = part_no_shortcut.replace('-', '')
+            print("part_no_shortcut:", part_no_shortcut)
+
+            query_product_name = """
+                SELECT "manufacturer" AS "origin", "description" AS "product_name"
+                FROM "WS_Installation"
+                WHERE REGEXP_REPLACE(
+                        REGEXP_REPLACE(           
+                            REGEXP_REPLACE(       
+                                "part_no",
+                                '-Z.*$', '', 'gi'
+                            ),
+                            '^1P', '', 'gi'
+                        ),
+                        '[^A-Za-z0-9]', '', 'g' 
+                    ) = %s
+                LIMIT 1
+            """
+            cursor.execute(query_product_name, (part_no_shortcut,))
+            data = cursor.fetchone()
+            if data:
+                product_name = data[1]
+                origin = data[0]
+            else:
+                product_name = None
+                origin = None
+
+            query_insert = """
+                INSERT INTO "WS_Import" ("import_id", "time", "import_time", "project_code", "product_name", "part_no", "origin", "quantity", "seri_number", "deleted", "statistical_id")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query_insert, (
+                input.form.po, 
+                import_time, 
+                import_time,
+                input.form.project_code,
+                product_name,
+                part_no,
+                origin,
+                1,
+                seri_no,
+                False,
+                None
+                ))
+            conn.commit()
+            return {
+                "status": "success",
+                "message": f"Đã nhập thiết bị {part_no} với số seri: {seri_no}."
+            }
+ 
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseImport_Scan_Form2_function(conn, input):
+    try:
+        cursor = conn.cursor()
+        import_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        part_no = input.form.part_no
+        if part_no.startswith("http://") or part_no.startswith("https://"):
+            part_no = re.sub(r'^https?://[^/]+/', '', part_no.strip())
+        seri_no = input.form.seri_no
+        print("part_no:", part_no)
+        print("seri_no:", seri_no)
+
+        query_check_exist = """
+            SELECT * 
+            FROM "WS_Import" 
+            WHERE "part_no" = %s 
+                AND "seri_number" = %s
+        """
+        cursor.execute(query_check_exist, (part_no, seri_no))
+        if cursor.rowcount > 0:
+            return {
+                "status": "error",
+                "message": f"Thiết bị {part_no} có số seri: {seri_no} đã tồn tại."
+            }
+        else:
+            part_no_shortcut = part_no
+            part_no_shortcut = re.sub(r'^1P', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = re.sub(r'-Z.*$', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = part_no_shortcut.replace('-', '')
+            print("part_no_shortcut:", part_no_shortcut)
+
+            query_product_name = """
+                SELECT "manufacturer" AS "origin", "description" AS "product_name"
+                FROM "WS_Installation"
+                WHERE REGEXP_REPLACE(
+                        REGEXP_REPLACE(           
+                            REGEXP_REPLACE(       
+                                "part_no",
+                                '-Z.*$', '', 'gi'
+                            ),
+                            '^1P', '', 'gi'
+                        ),
+                        '[^A-Za-z0-9]', '', 'g' 
+                    ) = %s
+                LIMIT 1
+            """
+            cursor.execute(query_product_name, (part_no_shortcut,))
+            data = cursor.fetchone()
+            if data:
+                product_name = data[1]
+                origin = data[0]
+            else:
+                product_name = None
+                origin = None
+
+            query_insert = """
+                INSERT INTO "WS_Import" ("import_id", "time", "import_time", "project_code", "product_name", "part_no", "origin", "quantity", "seri_number", "deleted", "statistical_id")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query_insert, (
+                input.form.po, 
+                import_time, 
+                import_time,
+                input.form.project_code,
+                product_name,
+                part_no,
+                origin,
+                1,
+                seri_no,
+                False,
+                None
+                ))
+            conn.commit()
+            return {
+                "status": "success",
+                "message": f"Đã nhập thiết bị {part_no} với số seri: {seri_no}."
+            }
+ 
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        cursor.close()
+
+def WarehouseInstallation_Scan_Form1_function(conn, input):
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        code = input.form.code
+        if code.startswith("http://") or code.startswith("https://"):
+            code = re.sub(r'^https?://[^/]+/', '', code.strip())
+        
+        print("code:", code)
+        parts = code.split("+", 1)
+        part_no = parts[0].strip()
+        seri_no = parts[1].strip() if len(parts) > 1 else ''
+        print("part_no:", part_no)
+        print("seri_no:", seri_no)
+
+        query_check_exist = """
+            SELECT * 
+            FROM "WS_Import" 
+            WHERE "part_no" = %s AND "seri_number" = %s
+        """
+        cursor.execute(query_check_exist, (part_no, seri_no))
+        if cursor.rowcount == 0:
+            return {
+                "status": "error",
+                "message": f"Thiết bị {part_no} có số seri: {seri_no} chưa được nhập kho. Hãy kiểm tra lại."
+            }
+        else:
+            part_no_shortcut = part_no
+            part_no_shortcut = re.sub(r'^1P', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = re.sub(r'-Z.*$', '', part_no_shortcut, flags=re.IGNORECASE)
+            part_no_shortcut = part_no_shortcut.replace('-', '')
+            print("part_no_shortcut:", part_no_shortcut)
+
+            query_check_installation_exist = """
+                SELECT "location", "cabinet_no", "project_code"
+                FROM "WS_Installation" 
+                WHERE REGEXP_REPLACE(
+                        REGEXP_REPLACE(           
+                            REGEXP_REPLACE(       
+                                "part_no",
+                                '-Z.*$', '', 'gi'
+                            ),
+                            '^1P', '', 'gi'
+                        ),
+                        '[^A-Za-z0-9]', '', 'g' 
+                    ) = %s 
+                    AND "seri_number" = %s
+            """
+            cursor.execute(query_check_installation_exist, (part_no_shortcut, seri_no))
+            data = cursor.fetchone()
+            if cursor.rowcount != 0:
+                location, cabinet_no, project_code = data
+                return {
+                    "status": "error",
+                    "message": f"Thiết bị {part_no} có số seri: {seri_no} đã được lắp tại tủ {location}, vi tri {cabinet_no} trong dự án {project_code}. Hãy kiểm tra lại."
+                }
+            else:
+                query_check_partlist_exist = """
+                    SELECT "location", "cabinet_no", "project_code"
+                    FROM "WS_Installation" 
+                    WHERE REGEXP_REPLACE(
+                            REGEXP_REPLACE(           
+                                REGEXP_REPLACE(       
+                                    "part_no",
+                                    '-Z.*$', '', 'gi'
+                                ),
+                                '^1P', '', 'gi'
+                            ),
+                            '[^A-Za-z0-9]', '', 'g' 
+                        ) = %s 
+                        AND "cabinet_no" = %s
+                        AND "location" = %s
+                        AND "project_code" = %s
+                """
+                cursor.execute(query_check_partlist_exist, (
+                    part_no_shortcut,
+                    input.form.cabinet_no,
+                    input.form.location,
+                    input.form.project_code
+                    ))
+                data = cursor.fetchone()
+                if cursor.rowcount == 0:
+                    return {
+                        "status": "error",
+                        "message": f"Chưa khai báo thiết bị {part_no}. Hãy kiểm tra lại file Partlist."
+                    }
+                else:
+
+                    query_update_seri_no = """
+                        UPDATE "WS_Installation"
+                        SET "seri_number" = %s
+                        WHERE REGEXP_REPLACE(
+                                REGEXP_REPLACE(           
+                                    REGEXP_REPLACE(       
+                                        "part_no",
+                                        '-Z.*$', '', 'gi'
+                                    ),
+                                    '^1P', '', 'gi'
+                                ),
+                                '[^A-Za-z0-9]', '', 'g' 
+                            ) = %s
+                            AND "cabinet_no" = %s
+                            AND "location" = %s
+                            AND "project_code" = %s
+                            AND "seri_number" IS NULL;
+                    """
+                    cursor.execute(query_update_seri_no, (
+                        seri_no,
+                        part_no_shortcut,
+                        input.form.cabinet_no,
+                        input.form.location,
+                        input.form.project_code
+                        ))
+                    conn.commit()
+
+                    query_product_name = """
+                        SELECT "manufacturer" AS "origin", "description" AS "product_name"
+                        FROM "WS_Installation"
+                        WHERE REGEXP_REPLACE(
+                                REGEXP_REPLACE(           
+                                    REGEXP_REPLACE(       
+                                        "part_no",
+                                        '-Z.*$', '', 'gi'
+                                    ),
+                                    '^1P', '', 'gi'
+                                ),
+                                '[^A-Za-z0-9]', '', 'g' 
+                            ) = %s
+                        LIMIT 1
+                    """
+                    cursor.execute(query_product_name, (part_no_shortcut,))
+                    data = cursor.fetchone()
+                    if data:
+                        product_name = data[1]
+                        origin = data[0]
+                    else:
+                        product_name = None
+                        origin = None
+
+                    query_insert_export="""
+                        INSERT INTO "WS_Export" ("export_id", "time", "export_time", "project_code", "product_name", "part_no", "origin", "quantity", "seri_number", "cabinet", "deleted", "location")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """
+                    cursor.execute(query_insert_export, (
+                        None, 
+                        now, 
+                        now,
+                        input.form.project_code,
+                        product_name,
+                        part_no,
+                        origin,
+                        1,
+                        seri_no,
+                        input.form.cabinet_no,
+                        False,
+                        input.form.location
+                        ))
+                    conn.commit()
+
+                    return {
+                        "status": "success",
+                        "message": f"Đã lắp thiết bị {part_no} với số seri: {seri_no}."
+                    }
+            
     except Exception as e:
         return {
             "status": "error",

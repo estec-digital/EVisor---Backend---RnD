@@ -26,10 +26,8 @@ VALUES (
   NOW(),
   NOW()
 );
----------------------
---- EXPORT
----------------------
-INSERT INTO "WS_Export" ("export_id", "project_code", "part_no", "seri_number", "time", "export_time")
+-- Orther case
+INSERT INTO "WS_Import" ("import_id", "project_code", "part_no", "seri_number", "time", "import_time")
 VALUES (
   %PO%,
   %MA DU AN%,
@@ -41,20 +39,66 @@ VALUES (
     %PART_NO%
   ),
   COALESCE(
-    (regexp_split_to_array(
-       regexp_replace(NULLIF(TRIM(%PART_SERI%), ''), '^https?://[^/]+/', ''),  -- loại bỏ http://.../
-       '\+'
-     ))[array_length(
-       regexp_split_to_array(
-         regexp_replace(NULLIF(TRIM(%PART_SERI%), ''), '^https?://[^/]+/', ''), '\+'
-       ), 1
-     )],
+    NULLIF(
+      regexp_replace(
+        regexp_replace(NULLIF(TRIM(%PART_SERI%), ''), '^https?://[^/]+/', ''),  -- loại bỏ http://.../
+        '^' || COALESCE(
+          (regexp_split_to_array(
+             regexp_replace(NULLIF(TRIM(%PART_SERI%), ''), '^https?://[^/]+/', ''), '\+'
+           ))[1],
+          %PART_NO%
+        ) || '\+?',  -- xóa phần part_no và dấu "+"
+        ''
+      ),
+      ''
+    ),
     %SERI_NO%
   ),
   NOW(),
   NOW()
 );
 
+---------------------
+--- EXPORT
+---------------------
+INSERT INTO "WS_Export" ("project_code", "seri_number","MD","TEN_TU")
+VALUES (
+    %MA DU AN%,
+    COALESCE(
+    (regexp_split_to_array(
+       regexp_replace(NULLIF(TRIM(%SERI_NO%), ''), '^https?://[^/]+/', ''),  -- loại bỏ http://.../
+       '\+'
+     ))[array_length(
+       regexp_split_to_array(
+         regexp_replace(NULLIF(TRIM(%SERI_NO%), ''), '^https?://[^/]+/', ''), '\+'
+       ), 1
+     )],
+    %SERI_NO%
+  )
+);
+-- Orther case
+INSERT INTO "WS_Export" ("project_code", "seri_number", "MD", "TEN_TU")
+VALUES (
+  %MA DU AN%,
+  COALESCE(
+    NULLIF(
+      regexp_replace(
+        regexp_replace(NULLIF(TRIM(%SERI_NO%), ''), '^https?://[^/]+/', ''),  -- loại bỏ http://.../
+        '^' || COALESCE(
+          (regexp_split_to_array(
+             regexp_replace(NULLIF(TRIM(%SERI_NO%), ''), '^https?://[^/]+/', ''), '\+'
+           ))[1],
+          ''
+        ) || '\+?',  -- xóa phần đầu (mã hàng / part_no) và dấu "+"
+        ''
+      ),
+      ''
+    ),
+    %SERI_NO%
+  ),
+  %MD%,
+  %TEN_TU%
+);
 
 ---------------------
 --- TRIGGER
