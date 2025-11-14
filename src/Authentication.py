@@ -93,6 +93,36 @@ def check_session(conn , user_id: str) -> bool:
     finally:
         cursor.close()
 
+def check_session_with_sessionid(conn , session_id: str) -> bool:
+    """
+    Check if the session for the given user_id is valid.
+    
+    Args:
+        user_id (str): The user ID to check the session for.
+    
+    Returns:
+        bool: True if the session is valid, False otherwise.
+    """
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT "expires_at" FROM "Session" WHERE "session_id" = %s
+            """
+        cursor.execute(query, (session_id,))
+        session = cursor.fetchone()
+        
+        if session and session[0] > datetime.now():
+            return True
+        else:
+            return False
+    
+    except Exception as e:
+        print(f"Error checking session: {str(e)}")
+        return False
+    
+    finally:
+        cursor.close()
+
 def Authentication_Logout_function(conn, input):
     try:
         user = input.username

@@ -14,11 +14,16 @@ from src.DB_Connection import *
 from src.WorkManagement import *
 from src.WarehouseManagement import *
 from src.DesignConstructionDepartment import *
+from src.ResearchAndDevelopment import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from fastapi import Form
 from pydantic import validator
+from apscheduler.schedulers.background import BackgroundScheduler
+import subprocess
+
+scheduler = BackgroundScheduler()
 
 # Tải biến môi trường từ file .env
 load_dotenv()
@@ -914,7 +919,35 @@ def Authentication_ChangePassword_api(input: Authentication_ChangePassword):
             "message": str(e)
             }
 
+# --------------------------------------------------------
+# Backup
+# --------------------------------------------------------
+class Backup_Postgresql_Download(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    sessionid: str = Field(default="abcd-1234", example="abcd-1234")
 
+@app.post("/RD/Tools/Backup/Postgresql", tags=["Research and Development"])
+async def Backup_Postgresql_api(input: Backup_Postgresql_Download):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session_with_sessionid(conn, input.sessionid)
+        if not session:
+            return {
+                "status": "error",
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+            }
+        return Backup_Postgresql_function(conn, input, minio_client,  MINIO_BUCKET)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+    }
+
+# --------------------------------------------------------
+# Scheduler 
+# --------------------------------------------------------
+scheduler.add_job(backup_postgres, 'cron', hour=16, minute=45)
+scheduler.start()
 # --------------------------------------------------------
 # WebSocket
 # --------------------------------------------------------

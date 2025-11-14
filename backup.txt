@@ -1,0 +1,1 @@
+docker-compose exec postgres pg_dump -U evisor estecdb > F:\E-Visor\EVisor---Backend---RnD\minio\minio_data\backup\backup.sql
