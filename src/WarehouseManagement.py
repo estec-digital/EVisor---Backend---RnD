@@ -1516,14 +1516,17 @@ def WarehouseImport_Scan_Form1_function(conn, input):
         code = input.form.code
         if code.startswith("http://") or code.startswith("https://"):
             code = re.sub(r'^https?://[^/]+/', '', code.strip())
-
-        
-        print("code:", code)
-        parts = code.split("+", 1)
-        part_no = parts[0].strip()
-        seri_no = parts[1].strip() if len(parts) > 1 else ''
-        print("part_no:", part_no)
-        print("seri_no:", seri_no)
+        if "|" in code:
+            parts = code.split("|", 1)
+            seri_no = parts[0].strip()
+            part_no = parts[1].strip()
+        else:
+            print("code:", code)
+            parts = code.split("+", 1)
+            part_no = parts[0].strip()
+            seri_no = parts[1].strip() if len(parts) > 1 else ''
+            print("part_no:", part_no)
+            print("seri_no:", seri_no)
 
         query_check_exist = """
             SELECT * 
@@ -1692,13 +1695,17 @@ def WarehouseInstallation_Scan_Form1_function(conn, input):
         code = input.form.code
         if code.startswith("http://") or code.startswith("https://"):
             code = re.sub(r'^https?://[^/]+/', '', code.strip())
-        
-        print("code:", code)
-        parts = code.split("+", 1)
-        part_no = parts[0].strip()
-        seri_no = parts[1].strip() if len(parts) > 1 else ''
-        print("part_no:", part_no)
-        print("seri_no:", seri_no)
+        if "|" in code:
+            parts = code.split("|", 1)
+            seri_no = parts[0].strip()
+            part_no = parts[1].strip()
+        else:
+            print("code:", code)
+            parts = code.split("+", 1)
+            part_no = parts[0].strip()
+            seri_no = parts[1].strip() if len(parts) > 1 else ''
+            print("part_no:", part_no)
+            print("seri_no:", seri_no)
 
         query_check_exist = """
             SELECT * 

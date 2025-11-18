@@ -310,6 +310,30 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
             "status": "error",
             "message": str(e)
         }
+    
+class WorkManagement_Download(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    version: Optional[int] = 1
+
+@app.post("/WorkManagement_Download", tags=["General"])
+async def WorkManagement_Download_api(input: WorkManagement_Download):
+    print("input:", input)
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        session = check_session(conn, input.owner)
+        if not session:
+            return {
+                "status": "error", 
+                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                }
+        else:
+            return WorkManagement_Download_function(input, conn, MINIO_BUCKET, minio_client)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 # ----------------------------------------------------------------
 ### Warehouse - Statistical 
 # ----------------------------------------------------------------
@@ -768,19 +792,19 @@ class FormWarehouseImportScan_Form1(BaseModel):
 
 class WarehouseImport_Scan_Form1(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
-    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    # owner: str = Field(default="hoanvlh", example="hoanvlh")
     form: FormWarehouseImportScan_Form1
 
 @app.post("/WS/WarehouseImport/Scan/Form1", tags=["Warehouse Application"])
 async def WarehouseImport_Scan_Form1_api(input: WarehouseImport_Scan_Form1):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error",
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-            }
+        # session = check_session(conn, input.owner)
+        # if not session:
+        #     return {
+        #         "status": "error",
+        #         "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+        #     }
         return WarehouseImport_Scan_Form1_function(conn, input)
     except Exception as e:
         return {
@@ -797,19 +821,19 @@ class FormWarehouseImportScan_Form2(BaseModel):
 
 class WarehouseImport_Scan_Form2(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
-    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    # owner: str = Field(default="hoanvlh", example="hoanvlh")
     form: FormWarehouseImportScan_Form2
 
 @app.post("/WS/WarehouseImport/Scan/Form2", tags=["Warehouse Application"])
 async def WarehouseImport_Scan_Form2_api(input: WarehouseImport_Scan_Form2):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error",
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-            }
+        # session = check_session(conn, input.owner)
+        # if not session:
+        #     return {
+        #         "status": "error",
+        #         "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+        #     }
         return WarehouseImport_Scan_Form2_function(conn, input)
     except Exception as e:
         return {
@@ -826,19 +850,19 @@ class FormWarehouseInstallationScan_Form1(BaseModel):
 
 class WarehouseInstallation_Scan_Form1(BaseModel):
     request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
-    owner: str = Field(default="hoanvlh", example="hoanvlh")
+    # owner: str = Field(default="hoanvlh", example="hoanvlh")
     form: FormWarehouseInstallationScan_Form1
 
 @app.post("/WS/WarehouseInstallation/Scan/Form1", tags=["Warehouse Application"])
 async def WarehouseInstallation_Scan_Form1_api(input: WarehouseInstallation_Scan_Form1):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error",
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-            }
+        # session = check_session(conn, input.owner)
+        # if not session:
+        #     return {
+        #         "status": "error",
+        #         "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+        #     }
         return WarehouseInstallation_Scan_Form1_function(conn, input)
     except Exception as e:
         return {

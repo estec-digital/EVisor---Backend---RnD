@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment
 from dateutil import parser
 from decimal import Decimal
 import os
+from src.POD_TimeTracker import save_file_local, save_file_minio, generate_dataframe
 
 def WorkManagement_Processing_function(content: bytes, conn, user_id, filename):
     # try:
@@ -332,8 +333,17 @@ def WorkManagement_DML_Delete_function(input: BaseModel, conn):
         return {"status": "error", "message": str(e)}
 
 def WorkManagement_DML_Insert_function(input: BaseModel, conn):
-    try:
+    # try:
         with conn.cursor() as cursor:
+            # Check version
+            query_current_version = """
+                SELECT MAX("version") FROM "WorkManagement" WHERE "owner" = %s
+            """
+            cursor.execute(query_current_version, (input.form.owner,))
+            row = cursor.fetchone()
+            current_version = row[0] if row and row[0] is not None else 1
+            print("current_version:", current_version)
+
             # Check tồn tại
             query = """
                 SELECT 1
@@ -364,8 +374,8 @@ def WorkManagement_DML_Insert_function(input: BaseModel, conn):
             query = """
                 INSERT INTO "WorkManagement" 
                 ("owner", "full_name", "project_code", "description", 
-                 "start_date", "end_date", "QTY", "site", "status")
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 "start_date", "end_date", "QTY", "site", "status", "version")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING "task_id"
             """
             cursor.execute(query, (
@@ -377,7 +387,8 @@ def WorkManagement_DML_Insert_function(input: BaseModel, conn):
                 input.form.end_date,
                 input.form.QTY,
                 input.form.site,
-                input.form.status
+                input.form.status,
+                current_version
             ))
             new_id = cursor.fetchone()[0]
             conn.commit()
@@ -388,9 +399,9 @@ def WorkManagement_DML_Insert_function(input: BaseModel, conn):
                 "id": new_id
             }
 
-    except Exception as e:
-        conn.rollback()
-        return {"status": "error", "message": str(e)}
+    # except Exception as e:
+    #     conn.rollback()
+    #     return {"status": "error", "message": str(e)}
 
     
 def WorkManagement_DML_Update_function(input: BaseModel, conn):
@@ -438,3 +449,87 @@ def WorkManagement_DML_Update_function(input: BaseModel, conn):
     except Exception as e:
         conn.rollback()
         return {"status": "error", "message": str(e)}
+
+
+def WorkManagement_Download_function(input, conn, MINIO_BUCKET, minio_client):
+    try:
+        with conn.cursor() as cursor:
+            query = """
+                SELECT 
+                    "full_name", 
+                    "description", 
+                    "start_date", 
+                    "end_date", 
+                    "QTY", 
+                    "site", 
+                    "project_code", 
+                    "status"
+                FROM "WorkManagement"
+                WHERE "owner" = %s AND "version" = %s
+            """
+            cursor.execute(query, (input.owner, input.version))
+            rows = cursor.fetchall()
+
+        if not rows:    
+            return {
+                "status": "error",
+                "message": "Không có bản ghi nào trong hệ thống."
+            }
+
+        # Lấy column name
+        cols = [desc[0] for desc in cursor.description]
+
+        # rows = list of tuples → convert to list of dict
+        data = [dict(zip(cols, r)) for r in rows]
+
+        # Group theo full_name → project_code → list task
+        grouped = {}
+
+        for row in data:
+            name = row["full_name"]
+            project = row["project_code"]
+
+            if name not in grouped:
+                grouped[name] = {}
+
+            if project not in grouped[name]:
+                grouped[name][project] = []
+
+            grouped[name][project].append({
+                "Mô tả công việc": row["description"],
+                "Kế hoạch - Từ": row["start_date"].strftime("%Y-%m-%d") if isinstance(row["start_date"], datetime) else row["start_date"],
+                "Kế hoạch - Đến": row["end_date"].strftime("%Y-%m-%d") if isinstance(row["end_date"], datetime) else row["end_date"],
+                "QTY": row["QTY"],
+                "Nơi làm việc": row["site"]
+            })
+
+        # Convert grouped → JSON output
+        json_output = []
+        for name, projects in grouped.items():
+            json_output.append({
+                "Tên nhân sự": name,
+                "Dự án": [
+                    {"Mã dự án": code, "Thông tin": tasks}
+                    for code, tasks in projects.items()
+                ]
+            })
+
+        print("json_output:", json_output)
+        df = generate_dataframe(json_output, 0)
+        df = df.sort_values(by=["Tên nhân sự", "Mã dự án", "Thời gian bắt đầu"]).reset_index(drop=True)
+        df = df.drop_duplicates(subset=["Tên nhân sự", "Mã dự án", "Mô tả công việc", "Thời gian bắt đầu", "Thời gian kết thúc"]).reset_index(drop=True)
+        output_path_local, overwork = save_file_local(df)
+        output_path_minio = save_file_minio(minio_client, output_path_local)
+        print("df_final:", df.head())
+        path_file = output_path_minio.split(f"{MINIO_BUCKET}/")[-1] if f"{MINIO_BUCKET}/" in output_path_minio else output_path_minio
+        url = minio_client.presigned_get_object(MINIO_BUCKET, path_file, expires=timedelta(seconds=3600))
+        return {
+            "status": "success",
+            "data": url
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
