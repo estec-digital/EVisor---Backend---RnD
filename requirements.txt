@@ -9,3 +9,4 @@ weaviate-client
 xlrd>=2.0.1
 jpype1
 uvicorn[standard]
+apscheduler

@@ -569,7 +569,7 @@ def WarehouseImportExport_DML_Insert_function(input, conn, option):
             INSERT INTO {table} 
             ({id_field}, "time", {time_field}, "project_code", "product_name", "part_no", "origin", "quantity", "seri_number")
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
+            RETURNING "id"
         """).format(
             table=sql.Identifier(table_name),
             id_field=sql.Identifier(id_field),
@@ -1147,7 +1147,7 @@ def WarehouseInstallation_Download_function(conn, input, minio_client: Minio, MI
 
         columns_file = [
             "NO.", "HIGHER LEVEL FUNCTION", "LOCATION", "DT", "QUANTITY",
-            "DESCRIPTION 1", "ORDER NUMBER", "SERIAL NUMBER", "MANUFACTURER"
+            "DESCRIPTION 1", "ORDER NUMBER", "SERIAL NUMBER", "MANUFACTURER", "STATUS"
         ]
         df["NO."] = df["id"]
         df["HIGHER LEVEL FUNCTION"] = df["higher_lever_function"].apply(
@@ -1160,6 +1160,7 @@ def WarehouseInstallation_Download_function(conn, input, minio_client: Minio, MI
         df["ORDER NUMBER"] = df["part_no"]
         df["SERIAL NUMBER"] = df["seri_number"]
         df["MANUFACTURER"] = df["manufacturer"]
+        df["STATUS"] = df["seri_number"].apply(lambda x: "Đã lắp đặt" if x is not None else "Chưa lắp đặt")
         if not input.project_code:
             input.project_code = df["project_code"].iloc[0]
         if not input.cabinet_no:
@@ -1772,6 +1773,10 @@ def WarehouseInstallation_Scan_Form1_function(conn, input):
                     input.form.location,
                     input.form.project_code
                     ))
+                # print(part_no_shortcut,
+                #     input.form.cabinet_no,
+                #     input.form.location,
+                #     input.form.project_code)
                 data = cursor.fetchone()
                 if cursor.rowcount == 0:
                     return {

@@ -10,7 +10,7 @@ import io
 import openpyxl
 import re
 
-def DCD_WarehouseInstallation_Upload_function(conn, owner, file):
+def DCD_WarehouseInstallation_Upload_function(conn, owner, file, minio_client, MINIO_BUCKET):
     try:
         project_code = file.filename.split(".")[0]
         print(project_code)
@@ -24,6 +24,7 @@ def DCD_WarehouseInstallation_Upload_function(conn, owner, file):
         col_higher = headers.get("Higher-level function with preceding sign")
         col_mount = headers.get("Mounting location with preceding sign")
         col_dt = headers.get("DT (identifying, without project structures, with preceding sign)")
+        col_main_function = headers.get(f"Main function")
 
         if not all([col_higher, col_mount, col_dt]):
             raise ValueError("Thiếu một trong các cột khóa chính (Higher-level / Mounting / DT identifying).")
@@ -33,7 +34,7 @@ def DCD_WarehouseInstallation_Upload_function(conn, owner, file):
         for i in range(1, 7):
             order_col = headers.get(f"Order number [{i}]")
             item_col = headers.get(f"Item number [{i}]")
-            if order_col and item_col:
+            if order_col and item_col :
                 col_pairs.append((order_col, item_col))
 
         if not col_pairs:
@@ -44,8 +45,11 @@ def DCD_WarehouseInstallation_Upload_function(conn, owner, file):
             higher = ws.cell(row=row, column=col_higher).value
             mount = ws.cell(row=row, column=col_mount).value
             dt_ident = ws.cell(row=row, column=col_dt).value
+            main_func_value = ws.cell(row=row, column=col_main_function).value if col_main_function else None
 
             if not (higher and mount and dt_ident):
+                continue
+            if main_func_value != "1":
                 continue
 
             for order_col, item_col in col_pairs:
@@ -77,9 +81,22 @@ def DCD_WarehouseInstallation_Upload_function(conn, owner, file):
         output_path = f"./minio/minio_data/DCD/Output/{project_code}.xlsx"
         wb.save(output_path)
 
+        object_name = f"data/DCD/Installation/Output/{project_code}.xlsx"
+        minio_client.fput_object(
+            bucket_name=MINIO_BUCKET,
+            object_name=object_name,
+            file_path=output_path
+        )
+
+        presigned_url = minio_client.presigned_get_object(
+            bucket_name=MINIO_BUCKET,
+            object_name=object_name,
+            expires=timedelta(seconds=3600)
+        )
+
         return {
             "status": "success",
-            "data": output_path
+            "url": presigned_url
         }
 
     except Exception as e:

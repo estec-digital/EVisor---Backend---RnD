@@ -15,6 +15,7 @@ from src.WorkManagement import *
 from src.WarehouseManagement import *
 from src.DesignConstructionDepartment import *
 from src.ResearchAndDevelopment import *
+from src.Permit import *
 import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -199,38 +200,45 @@ def POD_TimeTracker_Download_postapi(input: POD_TimeTracker_Download):
 async def WorkManagement_Processing_api(file: UploadFile = File(...), user_id: str = Form(...)):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, user_id)
-        if not session:
+        if user_id != "common":
+            permit = check_permit_WorkManagement_Processing(conn, user_id)
+            if not permit:
+                return {
+                    "status": "error", 
+                    "message": "Bạn không có quyền thực hiện thao tác này. Liên hệ quản trị viên để biết thêm chi tiết."
+                    }
+            session = check_session(conn, user_id)
+            if not session:
+                return {
+                    "status": "error", 
+                    "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                    }
+        # else:
+        object_name = f"data/General/WorkManagement/Input/{file.filename}"
+        print("object_name:", object_name)
+        content = await file.read()
+        print("minio_client:", minio_client)
+        minio_client.put_object(
+            MINIO_BUCKET,
+            object_name,
+            BytesIO(content),
+            length=len(content),
+            content_type=file.content_type
+        )
+        issummary = issummary_file(content, object_name, JVM_PATH)
+        if issummary:
+            print("ismmary:", issummary)
+            conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+            workmanagement = WorkManagement_Processing_function(content, conn, user_id, file.filename)
             return {
-                "status": "error", 
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-                }
+                "status": "success",
+                "message": "Đã tạo quản lý kế hoạch!"
+            }
         else:
-            object_name = f"data/General/WorkManagement/Input/{file.filename}"
-            print("object_name:", object_name)
-            content = await file.read()
-            print("minio_client:", minio_client)
-            minio_client.put_object(
-                MINIO_BUCKET,
-                object_name,
-                BytesIO(content),
-                length=len(content),
-                content_type=file.content_type
-            )
-            issummary = issummary_file(content, object_name, JVM_PATH)
-            if issummary:
-                print("ismmary:", issummary)
-                conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-                workmanagement = WorkManagement_Processing_function(content, conn, user_id, file.filename)
-                return {
-                    "status": "success",
-                    "message": "Đã tạo quản lý kế hoạch!"
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": "Sai định dạng cấu trúc tài liệu quản lý kế hoạch!"
-                }
+            return {
+                "status": "error",
+                "message": "Sai định dạng cấu trúc tài liệu quản lý kế hoạch!"
+            }
     except Exception as e:
         return {
             "status": "error",
@@ -255,14 +263,22 @@ class WorkManagement_View(BaseModel):
 async def WorkManagement_View_api(input: WorkManagement_View):
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error", 
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-                }
-        else:
-            return WorkManagement_View_function(input, conn)
+        
+        if input.owner != "common":
+            permit = check_permit_WorkManagement_View(conn, input.owner)
+            if not permit:
+                return {
+                    "status": "error", 
+                    "message": "Bạn không có quyền thực hiện thao tác này. Liên hệ quản trị viên để biết thêm chi tiết."
+                    }
+            session = check_session(conn, input.owner)
+            if not session:
+                return {
+                    "status": "error", 
+                    "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                    }
+        # else:
+        return WorkManagement_View_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
@@ -292,19 +308,26 @@ async def WorkManagement_DML_api(input: WorkManagement_DML):
     print("input:", input)
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error", 
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-                }
-        else:
-            if input.dml_action == "delete":
-                return WorkManagement_DML_Delete_function(input, conn)
-            elif input.dml_action == "insert":
-                return WorkManagement_DML_Insert_function(input, conn)
-            elif input.dml_action == "update":
-                return WorkManagement_DML_Update_function(input, conn)
+        if input.owner != "common":
+            permit = check_permit_WorkManagement_DML(conn, input.owner)
+            if not permit:
+                return {
+                    "status": "error", 
+                    "message": "Bạn không có quyền thực hiện thao tác này. Liên hệ quản trị viên để biết thêm chi tiết."
+                    }
+            session = check_session(conn, input.owner)
+            if not session:
+                return {
+                    "status": "error", 
+                    "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                    }
+        # else:
+        if input.dml_action == "delete":
+            return WorkManagement_DML_Delete_function(input, conn)
+        elif input.dml_action == "insert":
+            return WorkManagement_DML_Insert_function(input, conn)
+        elif input.dml_action == "update":
+            return WorkManagement_DML_Update_function(input, conn)
     except Exception as e:
         return {
             "status": "error",
@@ -321,14 +344,15 @@ async def WorkManagement_Download_api(input: WorkManagement_Download):
     print("input:", input)
     try:
         conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-        session = check_session(conn, input.owner)
-        if not session:
-            return {
-                "status": "error", 
-                "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
-                }
-        else:
-            return WorkManagement_Download_function(input, conn, MINIO_BUCKET, minio_client)
+        if input.owner != "common":
+            session = check_session(conn, input.owner)
+            if not session:
+                return {
+                    "status": "error", 
+                    "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
+                    }
+        # else:
+        return WorkManagement_Download_function(input, conn, MINIO_BUCKET, minio_client)
     except Exception as e:
         return {
             "status": "error",
@@ -568,7 +592,7 @@ async def WarehouseImportExport_View_Detail_api(input: WarehouseImportExport_Vie
 
 class FormWarehouseImportExport(BaseModel):
     id: int = Field(default=1, example=1)
-    ticket_id: str = Field(default=1, example=1)
+    ticket_id: Optional[str] = None
     time: Optional[datetime] = None
     ticket_time: Optional[datetime] = None
     project_code: str = Field(default="project_code", example="project_code")
@@ -886,7 +910,7 @@ async def DCD_WarehouseInstallation_Upload_api(
                 "status": "error",
                 "message": "Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại."
             }
-        return DCD_WarehouseInstallation_Upload_function(conn, owner, file)
+        return DCD_WarehouseInstallation_Upload_function(conn, owner, file, minio_client, MINIO_BUCKET)
     except Exception as e:
         return {
             "status": "error", 

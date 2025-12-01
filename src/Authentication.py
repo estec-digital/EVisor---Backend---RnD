@@ -15,7 +15,7 @@ def Authentication_function(conn, input):
     try:
         cursor = conn.cursor()
         query = """
-            SELECT "username", "password", "avatar", "full_name" FROM "User" WHERE "username" = %s AND "password" = %s
+            SELECT "username", "password", "avatar", "full_name", "role_id", "department_id" FROM "User" WHERE "username" = %s AND "password" = %s
             """
         cursor.execute(query, (input.username, input.password))
         user = cursor.fetchone()
@@ -43,6 +43,8 @@ def Authentication_function(conn, input):
                 "user_id": user[0],
                 "avatar": user[2],
                 "full_name": user[3],
+                "role_id": user[4],
+                "department_id": user[5],
                 "message": "Đăng nhập thành công!",
                 "session_id": session_id,
                 "expires_at": expires_at

@@ -17,7 +17,7 @@ import os
 from src.POD_TimeTracker import save_file_local, save_file_minio, generate_dataframe
 
 def WorkManagement_Processing_function(content: bytes, conn, user_id, filename):
-    # try:
+    try:
         # filename = os.path.splitext(filename)[0]
         df = pd.read_excel(BytesIO(content))
         print("DF:",df.tail(10))
@@ -227,11 +227,11 @@ def WorkManagement_Processing_function(content: bytes, conn, user_id, filename):
         
 
         return df_workmanagement.head(50)
-    # except Exception as e:
-    #     return {
-    #         "status": "error",
-    #         "message": str(e)
-    #     }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 def WorkManagement_View_function(input: BaseModel, conn):
     try:

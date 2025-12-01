@@ -41,7 +41,7 @@ def Backup_Postgresql_function(conn, input, minio_client: Minio, MINIO_BUCKET: s
         }
 
 def backup_postgres():
-    backup_file = f"F:/E-Visor/EVisor---Backend---RnD/minio/minio_data/backup/backup_database.sql"
+    backup_file = f"F:/E-Visor/EVisor---Backend---RnD/minio/minio_data/backup/backup_database_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
     cmd = f'docker-compose exec -T postgres pg_dump -U evisor estecdb'
     with open(backup_file, 'w') as f:
         subprocess.run(cmd, shell=True, stdout=f)
