@@ -966,7 +966,25 @@ def Authentication_ChangePassword_api(input: Authentication_ChangePassword):
             "status": "error", 
             "message": str(e)
             }
+    
+# --------------------------------------------------------
+# Permit
+# --------------------------------------------------------
+class Permit_View(BaseModel):
+    request_id: str = Field(default="evisor-1234567890", example="evisor-1234567890")
+    owner: str = Field(default="hoanvlh", example="hoanvlh")
 
+@app.post("/Permit/View", tags=["Permit"])
+def Permit_View_api(input: Permit_View):
+    try:
+        conn = get_postgres_connection(POSTGRESQL_SERVER, POSTGRES_PORT_EXTERNAL, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+        print(f"Connected to PostgreSQL database: {conn}")
+        return Permit_View_function(conn, input)
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": str(e)
+            }
 # --------------------------------------------------------
 # Backup
 # --------------------------------------------------------
@@ -1000,20 +1018,20 @@ scheduler.start()
 # WebSocket
 # --------------------------------------------------------
 
-# from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     await websocket.accept()
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-#             try:
-#                 payload = json.loads(data)
-#                 # payload example: {"request_id": "...", "owner": "...", "option": "..."}
-#                 print("Received payload:", payload)
-#                 response_msg = f"Payload processed: {payload['request_id']}"
-#                 await websocket.send_text(response_msg)
-#             except json.JSONDecodeError:
-#                 await websocket.send_text("Invalid JSON")
-#     except WebSocketDisconnect:
-#         print("Client disconnected")
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+@app.websocket("/websocket/greeting")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                payload = json.loads(data)
+                # payload example: {"request_id": "...", "owner": "...", "option": "..."}
+                print("Received payload:", payload)
+                response_msg = f"Payload processed: {payload['request_id']}"
+                await websocket.send_text(response_msg)
+            except json.JSONDecodeError:
+                await websocket.send_text("Invalid JSON")
+    except WebSocketDisconnect:
+        print("Client disconnected")
