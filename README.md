@@ -2,7 +2,7 @@
 ## 🔥Connect to Server RnD
 **IP: 192.168.54.39**  
 **Username: RnD**  
-**Password:** <_default_>  
+**Password: x@X123456789** 
 **Required:**  
 - Be on the same network layer. You can use a VPN to route your home network into the ESTEC network. For example, your IP should be in the range 192.168.54.xxx.
 - File .env key to deploy. 
